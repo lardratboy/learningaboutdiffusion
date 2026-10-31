@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inside a Diffusion Model — 3D Data-Flow Tutorial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0c12;--panel:#10131c;--panel2:#161a26;--line:#252b3b;--text:#d9deea;--dim:#8a93a8;--accent:#ffb35a;--accent2:#5ac8ff;--good:#7ee0a1;--toy:#c49bff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.55 Inter,system-ui,sans-serif;overflow:hidden}
+#app{display:grid;grid-template-columns:410px 1fr;height:100vh}
+#panel{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+#brand{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
+#brand h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.2px}
+#brand p{margin:2px 0 0;color:var(--dim);font-size:12px}
+#chips{display:flex;flex-wrap:wrap;gap:4px;padding:10px 18px;border-bottom:1px solid var(--line)}
+#chips button{width:28px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);color:var(--dim);font:600 11px 'JetBrains Mono',monospace;cursor:pointer}
+#chips button:hover{color:#fff;border-color:#3a4258}
+#chips button.on{background:var(--accent);color:#1a1206;border-color:var(--accent)}
+#content{flex:1;overflow:auto;padding:16px 18px 8px}
+#content h2{font-size:20px;margin:2px 0 8px;line-height:1.25}
+#content p{margin:8px 0}
+.kicker{color:var(--accent);font:600 11px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:1px}
+.eq{font-family:'JetBrains Mono',monospace;background:#0c0f17;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:10px 0;font-size:12px;overflow-x:auto;white-space:pre;line-height:1.6}
+.box{padding:8px 11px;border-radius:0 8px 8px 0;margin:10px 0;font-size:12.5px;line-height:1.5}
+.real{border-left:3px solid var(--accent2);background:#0e1724}
+.toy{border-left:3px solid var(--toy);background:#16112a}
+.try{border-left:3px solid var(--good);background:#0d1a14}
+.box b.h{display:block;font:600 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.8px;margin-bottom:2px}
+.real b.h{color:var(--accent2)}.toy b.h{color:var(--toy)}.try b.h{color:var(--good)}
+.tn{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--accent);cursor:pointer;border-bottom:1px dotted rgba(255,179,90,.5);white-space:nowrap}
+.tn:hover{color:#fff}
+button.act{background:#1d2333;border:1px solid #333b52;color:#fff;border-radius:6px;padding:2px 8px;font:500 12px Inter;cursor:pointer}
+button.act:hover{border-color:var(--accent)}
+#ctrls{display:flex;flex-direction:column;gap:10px;margin:14px 0 6px;padding:12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px}
+#ctrls:empty{display:none}
+.row{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.row .lab{width:110px;color:var(--dim);flex:none}
+.row input[type=range]{flex:1;accent-color:var(--accent)}
+.row .val{width:96px;text-align:right;font:12px 'JetBrains Mono',monospace;color:#fff;flex:none}
+.btnrow{display:flex;flex-wrap:wrap;gap:6px}
+.btn{background:#232a3c;border:1px solid #343c54;color:#fff;border-radius:8px;padding:6px 11px;font:500 12.5px Inter;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:#1b1206;border-color:var(--accent);font-weight:600}
+.wchip{background:#1a2030;border:1px solid #303850;color:var(--text);border-radius:14px;padding:3px 9px;font:12px 'JetBrains Mono',monospace;cursor:pointer}
+.wchip.on{background:var(--accent2);color:#04121d;border-color:var(--accent2)}
+.bars{display:grid;grid-template-columns:86px 1fr 46px;gap:3px 8px;font:11.5px 'JetBrains Mono',monospace;align-items:center}
+.bars .b{height:9px;background:linear-gradient(90deg,#ffb35a,#ffe08a);border-radius:3px;min-width:1px}
+.bars .n{color:var(--dim);text-align:right}
+.readout{font:12px 'JetBrains Mono',monospace;color:var(--dim)}
+.readout b{color:#fff;font-weight:600}
+table.shapes{width:100%;border-collapse:collapse;font:11.5px 'JetBrains Mono',monospace;margin:8px 0}
+table.shapes td,table.shapes th{border-bottom:1px solid var(--line);padding:4px 4px;text-align:left}
+table.shapes th{color:var(--dim);font-weight:400}
+#nav{display:flex;gap:8px;padding:10px 18px;border-top:1px solid var(--line);align-items:center}
+#nav .sp{flex:1;color:var(--dim);font-size:11.5px;text-align:center}
+#stage{position:relative;min-width:0;min-height:0;overflow:hidden}
+#stage canvas{display:block}
+#toolbar{position:absolute;top:10px;left:10px;right:10px;display:flex;flex-wrap:wrap;gap:8px;pointer-events:none;z-index:4}
+.grp{pointer-events:auto;background:rgba(16,19,28,.9);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:10px;padding:4px;display:flex;gap:2px;align-items:center;flex-wrap:wrap}
+.grp .gl{font:600 10px 'JetBrains Mono',monospace;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;padding:0 6px}
+.grp button{background:transparent;border:0;color:var(--dim);font:500 12px Inter;padding:5px 9px;border-radius:7px;cursor:pointer}
+.grp button:hover{color:#fff}
+.grp button.on{background:#283048;color:#fff}
+.grp label{font-size:11.5px;color:var(--dim);padding:0 6px;display:flex;gap:6px;align-items:center}
+.grp input[type=range]{width:80px;accent-color:var(--accent)}
+.grp .sep{width:1px;height:18px;background:var(--line);margin:0 3px}
+#tip{position:absolute;pointer-events:none;background:rgba(9,11,17,.96);border:1px solid #2e3650;border-radius:8px;padding:7px 9px;font:11.5px/1.5 'JetBrains Mono',monospace;display:none;max-width:360px;z-index:6;white-space:pre-wrap}
+#tip b{color:var(--accent)}
+#help{position:absolute;bottom:10px;right:10px;color:var(--dim);font-size:11px;background:rgba(16,19,28,.85);padding:6px 10px;border-radius:8px;border:1px solid var(--line);z-index:4}
+#help kbd{font:10.5px 'JetBrains Mono',monospace;background:#232a3c;border-radius:4px;padding:0 4px;color:#fff}
+#legend{position:absolute;bottom:10px;left:10px;font:10.5px 'JetBrains Mono',monospace;color:var(--dim);background:rgba(16,19,28,.85);padding:7px 10px;border-radius:8px;border:1px solid var(--line);display:grid;grid-template-columns:auto 120px;gap:4px 10px;align-items:center;z-index:4}
+#legend .g{height:9px;border-radius:3px}
+.tlabel{pointer-events:none;text-align:center;font:600 12px Inter;color:#fff;text-shadow:0 1px 3px #000,0 0 8px #000;white-space:nowrap;transition:opacity .3s}
+.tlabel span{display:block;font:400 10.5px 'JetBrains Mono',monospace;color:#aab3c8}
+.tlabel.dim{opacity:.25}
+.compact .tlabel span,.compact .elabel,.compact .wlabel{display:none}
+.elabel{pointer-events:none;font:500 10.5px 'JetBrains Mono',monospace;color:#9fb0d0;background:rgba(10,12,18,.75);padding:1px 5px;border-radius:4px;white-space:nowrap;transition:opacity .3s}
+.elabel.hot{color:var(--accent);border:1px solid rgba(255,179,90,.4)}
+.elabel.dim{opacity:.18}
+.wlabel{pointer-events:none;font:10.5px 'JetBrains Mono',monospace;color:#cfe8ff;text-shadow:0 0 4px #000;white-space:nowrap;transition:opacity .3s}
+.wlabel.q{color:var(--accent2)}
+.wlabel.dim{opacity:.15}
+@media (max-width:860px){#app{grid-template-columns:1fr;grid-template-rows:56vh 44vh}#panel{order:2;border-right:0;border-top:1px solid var(--line)}#stage{order:1}#help{display:none}#legend{display:none}.grp .gl{display:none}}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <div id="brand"><h1>Inside a Diffusion Model</h1><p>Follow one image through a latent diffusion transformer, tensor by tensor. Every cube is one number.</p></div>
+    <div id="chips"></div>
+    <div id="content"><div id="text"></div><div id="ctrls"></div></div>
+    <div id="nav"><button class="btn" id="prev">← Prev</button><div class="sp" id="navinfo"></div><button class="btn primary" id="next">Next →</button></div>
+  </aside>
+  <main id="stage">
+    <div id="toolbar">
+      <div class="grp" id="gMode"><span class="gl">Projection</span>
+        <button data-mode="volume" class="on" title="C×H×W block, channels stacked in depth">3D volume</button>
+        <button data-mode="slices" title="Each channel is a constant-z square, pulled apart">Z-slices</button>
+        <button data-mode="tiles" title="Channels laid side by side in one plane">2D tiles</button>
+        <button data-mode="height" title="2D tiles, value shown as height">Height</button>
+      </div>
+      <div class="grp">
+        <label title="Distance between z-slices">Spread <input type="range" id="gap" min="2" max="18" step="0.5" value="6"></label>
+        <label title="Hide later channels to look inside the volume">Cut-away <input type="range" id="cut" min="0" max="1" step="0.01" value="1"></label>
+        <button id="mag" class="on" title="Cube size proportional to |value| so you can see through">Size ∝ |v|</button>
+      </div>
+      <div class="grp" id="gCam"><span class="gl">Camera</span>
+        <button data-cam="persp" class="on">Persp</button><button data-cam="ortho">Ortho</button><span class="sep"></span>
+        <button data-view="iso">Iso</button><button data-view="front">Front</button><button data-view="top">Top</button><button data-view="side">Side</button><button data-view="flat" title="2D tiles + orthographic + front">Flat 2D</button><span class="sep"></span><button id="fit">Fit</button>
+      </div>
+      <div class="grp"><button id="dim" class="on" title="Fade tensors not in this chapter">Focus chapter</button><button id="lbl" class="on">Labels</button></div>
+    </div>
+    <div id="tip"></div>
+    <div id="legend">
+      <span>signed</span><div class="g" style="background:linear-gradient(90deg,#40b3ff,#1c1f29,#ff8c2e)"></div>
+      <span>weights</span><div class="g" style="background:linear-gradient(90deg,#0d0820,#7a1f7a,#ff6a3a,#ffe9a0)"></div>
+      <span>pixels</span><div class="g" style="background:linear-gradient(90deg,#ff2e26,#33ff4d,#4073ff)"></div>
+    </div>
+    <div id="help">drag <kbd>orbit</kbd> · right-drag <kbd>pan</kbd> · wheel <kbd>zoom</kbd> · <kbd>W A S D Q E</kbd> fly · double-click a tensor to focus it · click to select · <kbd>←</kbd><kbd>→</kbd> chapters</div>
+  </main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+/* =====================================================================
+   1. A tiny, real latent-diffusion-transformer pipeline (toy sizes)
+   ===================================================================== */
+const IMG=64, LS=16, C=8, G=8, NT=64, PD=32, D=48, NTXT=12, NB=4, DK=24, HW_IMG=IMG*IMG, HW_LAT=LS*LS;
+const PROMPT=['a','lighthouse','on','a','grassy','hill','by','the','sea','at','sunset','<pad>'];
+const REGIONS=['sky','sun','sea','hill','lighthouse'];
+const WORDREG={lighthouse:[4],grassy:[3],hill:[3],sea:[2],sunset:[0,1]};
+const CHNAME=['mean R','mean G','mean B','x-gradient','y-gradient','saddle','checker','bowl'];
+
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+function gauss(r,n,s=1){const o=new Float32Array(n);for(let i=0;i<n;i+=2){const u=r()||1e-9,v=r(),m=Math.sqrt(-2*Math.log(u));o[i]=m*Math.cos(6.283185*v)*s;if(i+1<n)o[i+1]=m*Math.sin(6.283185*v)*s;}return o;}
+const clamp01=x=>x<0?0:x>1?1:x;
+function matmul(A,n,a,B,b){const O=new Float32Array(n*b);for(let i=0;i<n;i++)for(let k=0;k<a;k++){const x=A[i*a+k];if(x===0)continue;const bo=k*b,oo=i*b;for(let j=0;j<b;j++)O[oo+j]+=x*B[bo+j];}return O;}
+function layerNorm(X,n,d){const O=new Float32Array(n*d);for(let i=0;i<n;i++){let m=0,v=0;for(let j=0;j<d;j++)m+=X[i*d+j];m/=d;for(let j=0;j<d;j++){const q=X[i*d+j]-m;v+=q*q;}v=1/Math.sqrt(v/d+1e-5);for(let j=0;j<d;j++)O[i*d+j]=(X[i*d+j]-m)*v;}return O;}
+const silu=x=>x/(1+Math.exp(-x)), gelu=x=>0.5*x*(1+Math.tanh(0.7978845608*(x+0.044715*x*x*x)));
+function std(a){let m=0;for(const x of a)m+=x;m/=a.length;let v=0;for(const x of a)v+=(x-m)*(x-m);return Math.sqrt(v/a.length);}
+
+/* ---- 1a. procedural input image: "a lighthouse on a grassy hill by the sea at sunset" ---- */
+function shade(x,y){
+  const H=38, lx=12;
+  if(y>=3&&y<5.2){const hw=(y-3)/2.2*2.6;if(Math.abs(x-lx)<hw)return[.75,.12,.1,4];}
+  if(y>=5.2&&y<9&&Math.abs(x-lx)<2.3){if(y>6&&y<8.3&&Math.abs(x-lx)<1.4)return[1,.92,.45,4];return[.12,.12,.14,4];}
+  if(y>=9&&y<29){const hw=2+(y-9)*.07;if(Math.abs(x-lx)<hw){const sh=.82+.18*((x-lx)/hw);return Math.floor((y-9)/4)%2===1?[.82*sh,.15*sh,.12*sh,4]:[.96*sh,.94*sh,.88*sh,4];}}
+  const ht=27.5+.03*(x-12)*(x-12);
+  if(y>ht){const d=y-ht,n=Math.sin(x*1.7+y*2.3)*.035;return[.2+n,.42+.12*Math.exp(-d/6)+n,.19,3];}
+  if(y>=H){const d=(y-H)/(IMG-H);if(Math.abs(x-46)<6-d*3&&Math.floor(y)%3===0)return[1,.62,.3,2];return[.07+.06*(1-d),.2+.12*(1-d),.4+.1*(1-d),2];}
+  const r=Math.hypot(x-46,y-33);
+  if(r<7)return[1,.86,.42,1];
+  const s=y/H, top=[.1,.07,.25], mid=[.5,.18,.42], bot=[1,.55,.25];
+  const c=s<.55?top.map((v,i)=>v+(mid[i]-v)*s/.55):mid.map((v,i)=>v+(bot[i]-v)*(s-.55)/.45);
+  const gl=Math.exp(-r*r/200)*.35;
+  return[Math.min(1,c[0]+gl),Math.min(1,c[1]+gl*.6),Math.min(1,c[2]+gl*.2),0];
+}
+const IMG_RGB=new Float32Array(3*HW_IMG), REGION=new Uint8Array(HW_IMG);
+(()=>{const SS=3;for(let y=0;y<IMG;y++)for(let x=0;x<IMG;x++){let r=0,g=0,b=0;for(let sy=0;sy<SS;sy++)for(let sx=0;sx<SS;sx++){const s=shade(x+(sx+.5)/SS,y+(sy+.5)/SS);r+=s[0];g+=s[1];b+=s[2];}const p=y*IMG+x,n=SS*SS;IMG_RGB[p]=r/n;IMG_RGB[HW_IMG+p]=g/n;IMG_RGB[2*HW_IMG+p]=b/n;REGION[p]=shade(x+.5,y+.5)[3];}})();
+
+/* ---- 1b. toy VAE: each 4×4×3 pixel block → 8 numbers (mean colour + 5 brightness patterns) ---- */
+const BASIS=(()=>{const fns=[()=>1,(u)=>u,(u,v)=>v,(u,v)=>u*v,(u,v,i,j)=>((i+j)&1)?-1:1,(u,v)=>u*u+v*v];const E=[];
+  for(const f of fns){const vec=new Float32Array(16);for(let j=0;j<4;j++)for(let i=0;i<4;i++)vec[j*4+i]=f(i-1.5,j-1.5,i,j);
+    for(const e of E){let d=0;for(let k=0;k<16;k++)d+=vec[k]*e[k];for(let k=0;k<16;k++)vec[k]-=d*e[k];}
+    let n=0;for(let k=0;k<16;k++)n+=vec[k]*vec[k];n=Math.sqrt(n);for(let k=0;k<16;k++)vec[k]/=n;E.push(vec);}return E;})();
+function encodeRaw(rgb){const o=new Float32Array(C*HW_LAT);for(let by=0;by<LS;by++)for(let bx=0;bx<LS;bx++){const lum=new Float32Array(16),m=[0,0,0];
+  for(let j=0;j<4;j++)for(let i=0;i<4;i++){const p=(by*4+j)*IMG+bx*4+i;for(let ch=0;ch<3;ch++)m[ch]+=rgb[ch*HW_IMG+p];lum[j*4+i]=.299*rgb[p]+.587*rgb[HW_IMG+p]+.114*rgb[2*HW_IMG+p];}
+  const q=by*LS+bx;for(let ch=0;ch<3;ch++)o[ch*HW_LAT+q]=m[ch]/16;
+  for(let k=1;k<6;k++){let d=0;for(let p=0;p<16;p++)d+=lum[p]*BASIS[k][p];o[(2+k)*HW_LAT+q]=d;}}return o;}
+const RAW0=encodeRaw(IMG_RGB), MU=[], SD=[];
+for(let c=0;c<C;c++){const s=RAW0.subarray(c*HW_LAT,(c+1)*HW_LAT);let m=0;for(const x of s)m+=x;m/=s.length;MU.push(m);SD.push(Math.max(1e-3,std(s)));}
+const Z0=new Float32Array(C*HW_LAT);for(let c=0;c<C;c++)for(let q=0;q<HW_LAT;q++)Z0[c*HW_LAT+q]=(RAW0[c*HW_LAT+q]-MU[c])/SD[c];
+function decode(z){const o=new Float32Array(3*HW_IMG);for(let by=0;by<LS;by++)for(let bx=0;bx<LS;bx++){const q=by*LS+bx,raw=[];for(let c=0;c<C;c++)raw.push(z[c*HW_LAT+q]*SD[c]+MU[c]);
+  for(let j=0;j<4;j++)for(let i=0;i<4;i++){let det=0;for(let k=1;k<6;k++)det+=raw[2+k]*BASIS[k][j*4+i];const p=(by*4+j)*IMG+bx*4+i;for(let ch=0;ch<3;ch++)o[ch*HW_IMG+p]=clamp01(raw[ch]+det);}}return o;}
+
+/* region fractions per 8×8-pixel token */
+const TOKFRAC=[];for(let n=0;n<NT;n++){const f=[0,0,0,0,0],gy=n>>3,gx=n&7;for(let y=0;y<8;y++)for(let x=0;x<8;x++)f[REGION[(gy*8+y)*IMG+gx*8+x]]+=1/64;TOKFRAC.push(f);}
+function tokRegionName(n){const f=TOKFRAC[n];if(f[4]>.2)return'lighthouse';let b=0;for(let i=1;i<5;i++)if(f[i]>f[b])b=i;return REGIONS[b];}
+
+/* ---- 1c. weights (seeded random — shapes are faithful, values are not trained) ---- */
+const R=rng(7);
+const Wpe=gauss(R,PD*D,1/Math.sqrt(PD));
+const POS=new Float32Array(NT*D);for(let n=0;n<NT;n++){const gx=n&7,gy=n>>3;for(let j=0;j<12;j++){const w=1.5*Math.pow(.7,j);POS[n*D+2*j]=Math.sin(gx*w);POS[n*D+2*j+1]=Math.cos(gx*w);POS[n*D+24+2*j]=Math.sin(gy*w);POS[n*D+24+2*j+1]=Math.cos(gy*w);}}
+const Wt1=gauss(R,D*D,1/Math.sqrt(D)), Wt2=gauss(R,D*D,1/Math.sqrt(D)), Wada=gauss(R,D*6*D,.35/Math.sqrt(D));
+const Wb=gauss(R,D*DK,1/Math.sqrt(D)), Rq=gauss(R,D*DK,.3/Math.sqrt(D)), Rk=gauss(R,D*DK,.3/Math.sqrt(D));
+const Wq=Wb.map((v,i)=>v+Rq[i]), Wk=Wb.map((v,i)=>v+Rk[i]);
+const BLK=[];for(let l=0;l<NB;l++)BLK.push({Wv:gauss(R,D*D,1/Math.sqrt(D)),Wo:gauss(R,D*D,.6/Math.sqrt(D)),W1:gauss(R,D*96,1/Math.sqrt(D)),W2:gauss(R,96*D,.6/Math.sqrt(96))});
+const TAU=1.35;
+
+function patchify(z){const o=new Float32Array(NT*PD);for(let c=0;c<C;c++)for(let h=0;h<LS;h++)for(let w=0;w<LS;w++)o[((h>>1)*G+(w>>1))*PD+c*4+(h&1)*2+(w&1)]=z[c*HW_LAT+h*LS+w];return o;}
+function unpatchify(t){const o=new Float32Array(C*HW_LAT);for(let c=0;c<C;c++)for(let h=0;h<LS;h++)for(let w=0;w<LS;w++)o[c*HW_LAT+h*LS+w]=t[((h>>1)*G+(w>>1))*PD+c*4+(h&1)*2+(w&1)];return o;}
+function embedTokens(tok){const h=matmul(tok,NT,PD,Wpe,D);for(let i=0;i<h.length;i++)h[i]+=POS[i];return h;}
+
+/* ---- 1d. text embeddings: hand-built so each content word resembles its image region
+         (this is the alignment that real training discovers) ---- */
+const TXT=new Float32Array(NTXT*D);
+(()=>{const ln0=layerNorm(embedTokens(patchify(Z0)),NT,D);const RT=rng(99);
+  PROMPT.forEach((w,i)=>{const nz=gauss(RT,D);const regs=WORDREG[w];
+    if(regs){const m=new Float32Array(D);let tot=0;for(let n=0;n<NT;n++){let f=0;for(const r of regs)f+=TOKFRAC[n][r];f=f*f;tot+=f;for(let j=0;j<D;j++)m[j]+=f*ln0[n*D+j];}
+      const gm=new Float32Array(D);for(let n=0;n<NT;n++)for(let j=0;j<D;j++)gm[j]+=ln0[n*D+j]/NT;
+      let nm=0;for(let j=0;j<D;j++){m[j]=m[j]/tot-.85*gm[j];nm+=m[j]*m[j];}nm=Math.sqrt(D)/Math.sqrt(nm);for(let j=0;j<D;j++)TXT[i*D+j]=m[j]*nm*.92+nz[j]*.38;}
+    else for(let j=0;j<D;j++)TXT[i*D+j]=nz[j]*(w==='<pad>'?.6:1);});})();
+
+/* ---- 1e. the "denoiser" — an oracle stand-in for trained weights ----
+   It knows z0 but only sees it blurred, more so at high noise: coarse structure first, detail last. */
+function blur(z,s){if(s<.05)return z.slice();const Rr=Math.ceil(s*2.5),k=[];let sum=0;for(let i=-Rr;i<=Rr;i++){const v=Math.exp(-i*i/(2*s*s));k.push(v);sum+=v;}for(let i=0;i<k.length;i++)k[i]/=sum;
+  const tmp=new Float32Array(z.length),o=new Float32Array(z.length);
+  for(let c=0;c<C;c++)for(let h=0;h<LS;h++)for(let w=0;w<LS;w++){let a=0;for(let i=-Rr;i<=Rr;i++){const ww=Math.min(LS-1,Math.max(0,w+i));a+=k[i+Rr]*z[c*HW_LAT+h*LS+ww];}tmp[c*HW_LAT+h*LS+w]=a;}
+  for(let c=0;c<C;c++)for(let h=0;h<LS;h++)for(let w=0;w<LS;w++){let a=0;for(let i=-Rr;i<=Rr;i++){const hh=Math.min(LS-1,Math.max(0,h+i));a+=k[i+Rr]*tmp[c*HW_LAT+hh*LS+w];}o[c*HW_LAT+h*LS+w]=a;}return o;}
+function x0Cond(zt,t){const b=blur(Z0,4*Math.pow(t,1.5)),leak=.25*t,o=new Float32Array(b.length);for(let i=0;i<b.length;i++)o[i]=b[i]+leak*(zt[i]-b[i]);return o;}
+const ALPHA=.3;
+function x0Uncond(xc){const b=blur(xc,1.2);for(let i=0;i<b.length;i++)b[i]*=1-ALPHA;return b;}
+const velocity=(zt,x0,t)=>{const o=new Float32Array(zt.length);for(let i=0;i<o.length;i++)o[i]=(zt[i]-x0[i])/t;return o;};
+
+/* ---- 1f. state + the forward computation at a given t ---- */
+const state={mode:'volume',gap:6,cut:1,mag:true,dim:true,labels:true,ortho:false,t:.5,w:1.5,N:20,shift:3,k:0,seed:1,query:1,chapter:0,playing:false};
+let EPS=gauss(rng(state.seed),C*HW_LAT);
+const S={};   // tensor data
+function computeForward(){
+  const t=state.t, tt=Math.max(t,.02);
+  S.zt=new Float32Array(C*HW_LAT);S.vt=new Float32Array(C*HW_LAT);
+  for(let i=0;i<S.zt.length;i++){S.zt[i]=(1-t)*Z0[i]+t*EPS[i];S.vt[i]=EPS[i]-Z0[i];}
+  S.tok=patchify(S.zt);S.hid=embedTokens(S.tok);
+  // timestep → embedding → MLP → adaLN params
+  S.temb=new Float32Array(D);for(let j=0;j<24;j++){const f=Math.exp(-Math.log(10000)*j/24);S.temb[j]=Math.cos(1000*t*f);S.temb[24+j]=Math.sin(1000*t*f);}
+  S.cvec=matmul(matmul(S.temb,1,D,Wt1,D).map(silu),1,D,Wt2,D);
+  S.ada=matmul(S.cvec.map(silu),1,D,Wada,6*D);
+  const A=S.ada, sh1=A.subarray(0,D),sc1=A.subarray(D,2*D),g1=A.subarray(2*D,3*D),sh2=A.subarray(3*D,4*D),sc2=A.subarray(4*D,5*D),g2=A.subarray(5*D,6*D);
+  const NS=NTXT+NT;
+  const mod=(X)=>{const Xn=layerNorm(X,NS,D);for(let n=NTXT;n<NS;n++)for(let j=0;j<D;j++)Xn[n*D+j]=Xn[n*D+j]*(1+sc1[j])+sh1[j];return Xn;};
+  const X=new Float32Array(NS*D);X.set(TXT,0);X.set(S.hid,NTXT*D);
+  const Xn=mod(X), Q=matmul(Xn,NS,D,Wq,DK), K=matmul(Xn,NS,D,Wk,DK);
+  const Att=new Float32Array(NS*NS);const sc=TAU/Math.sqrt(DK);
+  for(let i=0;i<NS;i++){let mx=-1e9;for(let j=0;j<NS;j++){let s=0;for(let d=0;d<DK;d++)s+=Q[i*DK+d]*K[j*DK+d];s*=sc;Att[i*NS+j]=s;if(s>mx)mx=s;}let sum=0;for(let j=0;j<NS;j++){const e=Math.exp(Att[i*NS+j]-mx);Att[i*NS+j]=e;sum+=e;}for(let j=0;j<NS;j++)Att[i*NS+j]/=sum;}
+  S.attn=Att;
+  // residual stream through NB blocks
+  S.res=new Float32Array((NB+1)*NT*D);let Rs=S.hid.slice();S.res.set(Rs,0);
+  for(let l=0;l<NB;l++){const B=BLK[l];const Xl=new Float32Array(NS*D);Xl.set(TXT,0);Xl.set(Rs,NTXT*D);
+    const V=matmul(mod(Xl),NS,D,B.Wv,D);const O=matmul(Att,NS,NS,V,D);const Oi=matmul(O.subarray(NTXT*D),NT,D,B.Wo,D);
+    for(let n=0;n<NT;n++)for(let j=0;j<D;j++)Rs[n*D+j]+=g1[j]*Oi[n*D+j];
+    const M=layerNorm(Rs,NT,D);for(let n=0;n<NT;n++)for(let j=0;j<D;j++)M[n*D+j]=M[n*D+j]*(1+sc2[j])+sh2[j];
+    const Hh=matmul(matmul(M,NT,D,B.W1,96).map(gelu),NT,96,B.W2,D);
+    for(let n=0;n<NT;n++)for(let j=0;j<D;j++)Rs[n*D+j]+=g2[j]*Hh[n*D+j];
+    S.res.set(Rs,(l+1)*NT*D);}
+  // prediction (oracle) + classifier-free guidance
+  const xc=x0Cond(S.zt,tt), xu=x0Uncond(xc);
+  S.vhat=velocity(S.zt,xc,tt);S.vun=velocity(S.zt,xu,tt);
+  S.vg=new Float32Array(S.vhat.length);for(let i=0;i<S.vg.length;i++)S.vg[i]=S.vun[i]+state.w*(S.vhat[i]-S.vun[i]);
+  S.x0h=new Float32Array(S.vhat.length);for(let i=0;i<S.x0h.length;i++)S.x0h[i]=S.zt[i]-tt*S.vhat[i];
+  S.otok=patchify(S.vhat);
+  computeAmap();
+}
+function computeAmap(){const NS=NTXT+NT,q=state.query;S.amap=new Float32Array(NT);for(let n=0;n<NT;n++)S.amap[n]=S.attn[q*NS+NTXT+n];}
+let TRAJ=[],X0S=[],TS=[];
+function schedule(N,s){const ts=[];for(let k=0;k<=N;k++){const u=1-k/N;ts.push(s*u/(1+(s-1)*u));}return ts;}
+function computeSampling(){
+  TS=schedule(state.N,state.shift);let z=EPS.slice();TRAJ=[z];X0S=[];
+  for(let k=0;k<state.N;k++){const t=TS[k],dt=t-TS[k+1];const xc=x0Cond(z,t),xu=x0Uncond(xc);const xg=new Float32Array(z.length),zn=new Float32Array(z.length);
+    for(let i=0;i<z.length;i++){xg[i]=xu[i]+state.w*(xc[i]-xu[i]);const v=(z[i]-xg[i])/t;zn[i]=z[i]-dt*v;}
+    X0S.push(xg);TRAJ.push(zn);z=zn;}
+  X0S.push(z.slice());S.out=decode(z);state.k=Math.min(state.k,state.N);setStepData();
+}
+function setStepData(){const k=state.k;S.zk=TRAJ[k];S.x0k=X0S[k];S.zkimg=decode(TRAJ[k]);S.x0kimg=decode(X0S[k]);}
+S.img=IMG_RGB;S.z0=Z0;S.eps=EPS;S.pos=POS;S.txt=TXT;
+computeForward();computeSampling();
+
+/* =====================================================================
+   2. Three.js scene
+   ===================================================================== */
+const stage=document.getElementById('stage');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(2,devicePixelRatio));renderer.setClearColor(0x0a0c12);
+stage.prepend(renderer.domElement);
+const labelR=new CSS2DRenderer();Object.assign(labelR.domElement.style,{position:'absolute',top:'0',left:'0',pointerEvents:'none'});stage.appendChild(labelR.domElement);
+const scene=new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xffffff,0x303850,1.25));
+const dl=new THREE.DirectionalLight(0xffffff,1.5);dl.position.set(.6,1,1.4);scene.add(dl);
+const dl2=new THREE.DirectionalLight(0x8fb0ff,.45);dl2.position.set(-1,-.4,-1);scene.add(dl2);
+
+const FOV=45, ORTHO_H=200;
+const persp=new THREE.PerspectiveCamera(FOV,1,.5,9000);
+const ortho=new THREE.OrthographicCamera(-100,100,100,-100,-6000,9000);
+persp.position.set(300,200,500);ortho.position.copy(persp.position);
+let cam=persp;
+const mkCtl=c=>{const k=new OrbitControls(c,renderer.domElement);k.enableDamping=true;k.dampingFactor=.09;k.screenSpacePanning=true;k.zoomSpeed=1.1;return k;};
+const ctlP=mkCtl(persp),ctlO=mkCtl(ortho);ctlO.enabled=false;let ctl=ctlP;
+
+/* ---------- tensor visualiser ---------- */
+const BOX=new THREE.BoxGeometry(1,1,1);
+const HAMP=10;
+const T={},TL=[];
+const ZC=[.11,.12,.16],NEG=[.25,.7,1],POSC=[1,.55,.18];
+const MAG=[[.05,.03,.12],[.48,.12,.48],[1,.42,.23],[1,.92,.62]];
+const RGBC=[[1,.18,.15],[.2,1,.3],[.25,.45,1]];
+class TV{
+  constructor(id,shape,kind,title,sub,lane,opts={}){
+    Object.assign(this,{id,kind,title,sub,lane},opts);
+    [this.C,this.H,this.W]=shape;this.n=this.C*this.H*this.W;this.scale=1;
+    this.mat=new THREE.MeshLambertMaterial({color:0xffffff});
+    this.mesh=new THREE.InstancedMesh(BOX,this.mat,this.n);
+    this.mesh.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(this.n*3),3);
+    this.mesh.frustumCulled=false;this.mesh.userData.tv=this;
+    this.group=new THREE.Group();this.group.add(this.mesh);scene.add(this.group);
+    this.cur=new Float32Array(this.n*3);this.from=new Float32Array(this.n*3);this.to=new Float32Array(this.n*3);
+    this.size=new THREE.Vector3(1,1,1);this.gfrom=new THREE.Vector3();this.gto=new THREE.Vector3();
+    const el=document.createElement('div');el.className='tlabel';el.innerHTML=`${title}<span>${sub}</span>`;
+    this.labelEl=el;this.label=new CSS2DObject(el);this.label.center.set(.5,1);this.group.add(this.label);
+    this.reveal=null;this.focused=true;this.extra=[];
+    if(kind==='rgb'){this.texData=new Uint8Array(this.W*this.H*4);this.tex=new THREE.DataTexture(this.texData,this.W,this.H);this.tex.magFilter=THREE.NearestFilter;this.tex.colorSpace=THREE.SRGBColorSpace;
+      this.pmat=new THREE.MeshBasicMaterial({map:this.tex,transparent:true});this.preview=new THREE.Mesh(new THREE.PlaneGeometry(40,40),this.pmat);this.group.add(this.preview);}
+    T[id]=this;TL.push(this);
+  }
+  get data(){return S[this.id];}
+  addLabel(text,idx,off,cls,center){const el=document.createElement('div');el.className='wlabel '+(cls||'');el.textContent=text;const o=new CSS2DObject(el);if(center)o.center.set(center[0],center[1]);this.group.add(o);this.extra.push({o,el,idx,off});return el;}
+  norm(v){if(this.kind==='rgb')return v;if(this.kind==='seq')return Math.min(1,Math.sqrt(Math.max(0,v)/this.scale));return Math.max(-1,Math.min(1,v/this.scale));}
+  layout(){
+    const {C,H,W,n}=this,m=state.mode,tiled=m==='tiles'||m==='height';
+    const cols=tiled?(C<=5?C:Math.ceil(Math.sqrt(C))):1,tg=Math.max(2,Math.round(Math.min(H,W)*.18));
+    const zsp=m==='volume'?1:m==='slices'?state.gap:0;
+    let mnx=1e9,mny=1e9,mnz=1e9,mxx=-1e9,mxy=-1e9,mxz=-1e9;const to=this.to,HWl=H*W;
+    for(let i=0;i<n;i++){const c=(i/HWl)|0,r=i-c*HWl,h=(r/W)|0,w=r-h*W;let x,y,z;
+      if(tiled){const col=c%cols,row=(c/cols)|0;x=col*(W+tg)+w;y=-(row*(H+tg)+h);z=0;}else{x=w;y=-h;z=-c*zsp;}
+      if(this.split){if(h>=this.split)y-=1.6;if(w>=this.split)x+=1.6;}
+      to[3*i]=x;to[3*i+1]=y;to[3*i+2]=z;
+      if(x<mnx)mnx=x;if(x>mxx)mxx=x;if(y<mny)mny=y;if(y>mxy)mxy=y;if(z<mnz)mnz=z;if(z>mxz)mxz=z;}
+    const cx=(mnx+mxx)/2,cy=(mny+mxy)/2,cz=(mnz+mxz)/2;
+    for(let i=0;i<n;i++){to[3*i]-=cx;to[3*i+1]-=cy;to[3*i+2]-=cz;}
+    this.size.set(mxx-mnx+1,mxy-mny+1,Math.max(mxz-mnz+1,m==='height'?2*HAMP:1));
+    this.from.set(this.cur);
+  }
+  bottom(){return this.gto.y-this.size.y/2-(this.preview?50:0);}
+  top(){return this.gto.y+this.size.y/2;}
+  place(u){
+    for(let i=0;i<this.cur.length;i++)this.cur[i]=this.from[i]+(this.to[i]-this.from[i])*u;
+    this.group.position.lerpVectors(this.gfrom,this.gto,u);
+    const sy=this.size.y;this.label.position.set(0,sy/2+3,this.size.z/2);
+    if(this.preview)this.preview.position.set(0,-sy/2-26,0);
+    for(const e of this.extra){const i=e.idx;e.o.position.set(this.cur[3*i]+e.off[0],this.cur[3*i+1]+e.off[1],this.cur[3*i+2]+.6);}
+  }
+  refresh(){
+    const {C,H,W,n,kind}=this,HWl=H*W,M=this.mesh.instanceMatrix.array,CO=this.mesh.instanceColor.array,data=this.data,cur=this.cur;
+    const cutC=C>1?Math.max(1,Math.ceil(state.cut*C-1e-6)):1,height=state.mode==='height',mag=state.mag&&!height;
+    if(this.autoScale){let mx=1e-9;for(const v of data)mx=Math.max(mx,Math.abs(v));this.scale=mx;}
+    for(let i=0;i<n;i++){const c=(i/HWl)|0;const v=data[i],tn=this.norm(v);
+      let vis=c<cutC;if(vis&&this.reveal){const r=i-c*HWl,h=(r/W)|0;vis=this.reveal(c,h,r-h*W);}
+      let sx=.9,sz=.9,px=cur[3*i],py=cur[3*i+1],pz=cur[3*i+2];
+      if(!vis){sx=0;sz=0;}else if(height){const hh=tn*HAMP;sz=Math.max(.08,Math.abs(hh));pz+=hh/2;}else if(mag){sx=sz=.2+.76*Math.min(1,Math.abs(tn));}
+      const o=i*16;M[o]=sx;M[o+1]=0;M[o+2]=0;M[o+3]=0;M[o+4]=0;M[o+5]=sx;M[o+6]=0;M[o+7]=0;M[o+8]=0;M[o+9]=0;M[o+10]=sz;M[o+11]=0;M[o+12]=px;M[o+13]=py;M[o+14]=pz;M[o+15]=1;
+      let r,g,b;
+      if(kind==='rgb'){const k=.07+.93*tn,bc=RGBC[c];r=bc[0]*k;g=bc[1]*k;b=bc[2]*k;}
+      else if(kind==='seq'){const x=tn*3,s=Math.min(2,x|0),f=x-s,A=MAG[s],B=MAG[s+1];r=A[0]+(B[0]-A[0])*f;g=A[1]+(B[1]-A[1])*f;b=A[2]+(B[2]-A[2])*f;}
+      else{const a=Math.pow(Math.abs(tn),.75),tg=tn<0?NEG:POSC;r=ZC[0]+(tg[0]-ZC[0])*a;g=ZC[1]+(tg[1]-ZC[1])*a;b=ZC[2]+(tg[2]-ZC[2])*a;}
+      CO[3*i]=r;CO[3*i+1]=g;CO[3*i+2]=b;}
+    this.mesh.instanceMatrix.needsUpdate=true;this.mesh.instanceColor.needsUpdate=true;this.mesh.boundingSphere=null;this.mesh.boundingBox=null;
+    if(this.preview){const HWp=this.W*this.H;for(let y=0;y<this.H;y++)for(let x=0;x<this.W;x++){const p=y*this.W+x,o=((this.H-1-y)*this.W+x)*4;
+      let vis=true;if(this.reveal)vis=this.reveal(0,y,x);
+      this.texData[o]=vis?data[p]*255:16;this.texData[o+1]=vis?data[HWp+p]*255:18;this.texData[o+2]=vis?data[2*HWp+p]*255:26;this.texData[o+3]=255;}this.tex.needsUpdate=true;}
+  }
+  setFocus(f){this.focused=f;const dim=!f&&state.dim;this.mat.transparent=dim;this.mat.opacity=dim?.1:1;this.mat.depthWrite=!dim;this.mat.needsUpdate=true;
+    if(this.pmat)this.pmat.opacity=dim?.15:1;
+    this.labelEl.classList.toggle('dim',dim);for(const e of this.extra)e.el.classList.toggle('dim',dim);}
+  world(i,out){return out.set(this.cur[3*i],this.cur[3*i+1],this.cur[3*i+2]).add(this.group.position);}
+  idx(c,h,w){return (c*this.H+h)*this.W+w;}
+}
+
+const LAT=[8,16,16];
+const DEFS=[
+ ['img',[3,64,64],'rgb','x · input image','3 × 64 × 64 pixels','A'],
+ ['z0',LAT,'div','z₀ · clean latent','8 × 16 × 16','A'],
+ ['eps',LAT,'div','ε · Gaussian noise','8 × 16 × 16  ~ N(0, I)','A'],
+ ['zt',LAT,'div','z_t · noisy latent','(1−t)·z₀ + t·ε','A'],
+ ['tok',[1,64,32],'div','patch tokens','64 tokens × 32 values','A'],
+ ['pos',[1,64,48],'div','position embedding','64 × 48  (2-D sin/cos)','A'],
+ ['hid',[1,64,48],'div','image tokens h','64 × 48  hidden width','A'],
+ ['attn',[1,76,76],'seq','attention A','76 × 76 = softmax(QKᵀ/√d)','A',{split:12}],
+ ['amap',[1,8,8],'seq','query → image','8 × 8 patch grid','A',{autoScale:true}],
+ ['res',[5,64,48],'div','residual stream','(blocks+1) × 64 × 48','A'],
+ ['otok',[1,64,32],'div','output tokens','64 × 32','A'],
+ ['vhat',LAT,'div','v̂ · predicted velocity','8 × 16 × 16','A'],
+ ['vt',LAT,'div','v · training target','ε − z₀','A'],
+ ['vun',LAT,'div','v̂∅ · unconditional','empty-prompt pass','A'],
+ ['vg',LAT,'div','v̂_cfg · guided','v̂∅ + w·(v̂ − v̂∅)','A'],
+ ['x0h',LAT,'div','x̂₀ · predicted clean latent','z_t − t·v̂','A'],
+ ['txt',[1,12,48],'div','text embeddings','12 tokens × 48','B'],
+ ['temb',[1,1,48],'div','timestep features','sin/cos(1000·t) · 48','B'],
+ ['cvec',[1,1,48],'div','conditioning vector c','MLP(features) · 48','B'],
+ ['ada',[1,6,48],'div','adaLN parameters','6 × 48: shift/scale/gate ×2','B'],
+ ['zk',LAT,'div','z_k · sampler state','step k of N','C'],
+ ['zkimg',[3,64,64],'rgb','decode(z_k)','noisy latent → pixels','C'],
+ ['x0k',LAT,'div','x̂₀ at step k','the model’s current guess','C'],
+ ['x0kimg',[3,64,64],'rgb','decode(x̂₀)','preview of the guess','C'],
+ ['out',[3,64,64],'rgb','final image','VAE decode(z at t = 0)','C'],
+];
+for(const d of DEFS)new TV(d[0],d[1],d[2],d[3],d[4],d[5],d[6]||{});
+// value scales (fixed so colours are comparable across t)
+for(const t of TL){if(t.kind==='rgb'||t.autoScale)continue;  if(['z0','eps','zt','tok','otok','vhat','vt','vun','vg','x0h','zk','x0k'].includes(t.id))t.scale=2.5;
+  else if(t.id==='temb')t.scale=1;else if(t.id==='attn'){let m=0;for(const v of S.attn)m=Math.max(m,v);t.scale=m*.8;}
+  else t.scale=2.5*std(t.data);}
+// labels for text tokens & attention quadrants
+PROMPT.forEach((w,i)=>T.txt.addLabel(w,i*48,[-1.6,0],'',[1,.5]));
+T.attn.addLabel('text keys',6,[0,3],'',[.5,1]);T.attn.addLabel('image keys',44,[0,3],'',[.5,1]);
+T.attn.addLabel('text queries',6*76,[-1.6,0],'',[1,.5]);T.attn.addLabel('image queries',44*76,[-1.6,0],'',[1,.5]);
+const ADAN=['shift₁','scale₁','gate₁','shift₂','scale₂','gate₂'];ADAN.forEach((w,i)=>T.ada.addLabel(w,i*48,[-1.6,0],'',[1,.5]));
+
+/* ---------- flow edges ---------- */
+const EDGE_DEFS=[['img','z0','VAE encoder'],['z0','zt','× (1−t)'],['eps','zt','× t'],['zt','tok','patchify'],['tok','hid','linear 32→48'],['pos','hid','+'],
+ ['hid','attn','Q·Kᵀ'],['txt','attn','joint sequence'],['attn','amap','pick a row'],['hid','res','N × DiT block'],['ada','res','modulate'],['temb','cvec','MLP'],['cvec','ada','linear'],
+ ['res','otok','final layer'],['otok','vhat','unpatchify'],['vt','vhat','loss ‖v̂ − v‖²'],['vhat','vg','cond'],['vun','vg','uncond'],['vhat','x0h',''],
+ ['vg','zk','Euler step  z ← z − Δt·v'],['zk','zkimg','decode'],['x0k','x0kimg','decode'],['zk','x0k',''],['zk','out','decode at t=0'],['zk','tok','loop: next step feeds back as z_t']];
+const edgeMatDim=new THREE.LineBasicMaterial({color:0x46506a,transparent:true,opacity:.7});
+const edgeMatHot=new THREE.LineBasicMaterial({color:0xffb35a});
+const coneGeo=new THREE.ConeGeometry(1.5,4.5,10);
+const coneDim=new THREE.MeshBasicMaterial({color:0x46506a}),coneHot=new THREE.MeshBasicMaterial({color:0xffb35a});
+const EDGES=EDGE_DEFS.map(([a,b,l])=>{const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(49*3),3));
+  const line=new THREE.Line(geo,edgeMatDim);const cone=new THREE.Mesh(coneGeo,coneDim);scene.add(line,cone);
+  let lab=null,el=null;if(l){el=document.createElement('div');el.className='elabel';el.textContent=l;lab=new CSS2DObject(el);scene.add(lab);}
+  return{a:T[a],b:T[b],line,cone,lab,el};});
+const _v=[new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()];
+function bez(p0,p1,p2,p3,t,o){const u=1-t;return o.set(0,0,0).addScaledVector(p0,u*u*u).addScaledVector(p1,3*u*u*t).addScaledVector(p2,3*u*t*t).addScaledVector(p3,t*t*t);}
+function updateEdges(){
+  for(const e of EDGES){const A=e.a,B=e.b,pa=A.group.position,pb=B.group.position;const[p0,p1,p2,p3,q,q2]=_v;
+    const aR=pa.x+A.size.x/2,bL=pb.x-B.size.x/2;
+    if(bL>aR+2){p0.set(aR+1.5,pa.y,0);p3.set(bL-3,pb.y,0);const dx=p3.x-p0.x;const lift=(A.lane===B.lane&&dx>70)?Math.min(80,dx*.18):0;p1.set(p0.x+dx*.4,p0.y+lift,0);p2.set(p3.x-dx*.4,p3.y+lift,0);}
+    else{const aB=pa.y-A.size.y/2-(A.preview?50:0),bB=pb.y-B.size.y/2-(B.preview?50:0);
+      if(pb.y<pa.y-5){p0.set(pa.x,aB-2,0);p3.set(pb.x,pb.y+B.size.y/2+14,0);const k=Math.max(30,(p0.y-p3.y)*.5);p1.set(p0.x,p0.y-k,0);p2.set(p3.x,p3.y+k,0);}
+      else if(pb.y>pa.y+5){p0.set(pa.x,pa.y+A.size.y/2+12,0);p3.set(pb.x,bB-3,0);const k=Math.max(30,(p3.y-p0.y)*.5);p1.set(p0.x,p0.y+k,0);p2.set(p3.x,p3.y-k,0);}
+      else{p0.set(pa.x,aB-2,0);p3.set(pb.x,bB-3,0);p1.set(p0.x,p0.y-35,0);p2.set(p3.x,p3.y-35,0);}}
+    const arr=e.line.geometry.attributes.position.array;for(let i=0;i<49;i++){bez(p0,p1,p2,p3,i/48,q);arr[3*i]=q.x;arr[3*i+1]=q.y;arr[3*i+2]=q.z;}
+    e.line.geometry.attributes.position.needsUpdate=true;e.line.geometry.computeBoundingSphere();
+    bez(p0,p1,p2,p3,.95,q2);e.cone.position.copy(p3);e.cone.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),q.copy(p3).sub(q2).normalize());
+    if(e.lab){bez(p0,p1,p2,p3,.5,q);e.lab.position.copy(q);}}
+}
+function styleEdges(){for(const e of EDGES){const hot=e.a.focused&&e.b.focused&&curFocus!=='all';e.line.material=hot?edgeMatHot:edgeMatDim;e.cone.material=hot?coneHot:coneDim;
+  if(e.el){e.el.classList.toggle('hot',hot);e.el.classList.toggle('dim',state.dim&&curFocus!=='all'&&!hot);}}}
+
+/* ---------- layout across lanes ---------- */
+const LANE_Y={A:0,B:118,C:-205},GAP=30;
+let layoutU=1;
+function relayout(animate=true){
+  for(const t of TL){t.layout();t.gfrom.copy(t.group.position);}
+  let x=0;for(const t of TL.filter(t=>t.lane==='A')){t.gto.set(x+t.size.x/2,LANE_Y.A,0);x+=t.size.x+GAP;}
+  x=T.hid.gto.x-T.hid.size.x/2;for(const t of TL.filter(t=>t.lane==='B')){t.gto.set(x+t.size.x/2,LANE_Y.B,0);x+=t.size.x+GAP+10;}
+  x=T.img.gto.x-T.img.size.x/2;for(const t of TL.filter(t=>t.lane==='C')){t.gto.set(x+t.size.x/2,LANE_Y.C,0);x+=t.size.x+GAP+16;}
+  layoutU=animate?0:1;if(!animate){for(const t of TL){t.place(1);t.refresh();}updateEdges();}
+}
+
+/* ---------- highlight boxes ---------- */
+function mkHL(color,opacity){const m=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color,transparent:true,opacity,depthTest:false}));m.renderOrder=10;m.frustumCulled=false;scene.add(m);return m;}
+const hoverHL=mkHL(0xffffff,.95),selHL=mkHL(0x5ac8ff,.95),relHL=mkHL(0xffb35a,.9);
+const EDGE_IDX=[[0,1],[1,3],[3,2],[2,0],[4,5],[5,7],[7,6],[6,4],[0,4],[1,5],[2,6],[3,7]];
+function setBoxes(hl,boxes){const arr=new Float32Array(boxes.length*72);let o=0;
+  for(const[mn,mx]of boxes){const c=[];for(let k=0;k<8;k++)c.push([k&1?mx.x:mn.x,k&2?mx.y:mn.y,k&4?mx.z:mn.z]);for(const[a,b]of EDGE_IDX){arr.set(c[a],o);arr.set(c[b],o+3);o+=6;}}
+  hl.geometry.dispose();hl.geometry=new THREE.BufferGeometry();hl.geometry.setAttribute('position',new THREE.BufferAttribute(arr,3));}
+// cells: [[c,h,w],...] grouped per channel into an AABB each
+function boxesFor(t,cells,pad=.6){const by=new Map(),p=new THREE.Vector3();
+  for(const[c,h,w]of cells){t.world(t.idx(c,h,w),p);let b=by.get(c);if(!b){b=[p.clone(),p.clone()];by.set(c,b);}else{b[0].min(p);b[1].max(p);}}
+  const out=[];for(const b of by.values()){const z=state.mode==='height'?HAMP:.5;out.push([b[0].clone().addScalar(-pad).setZ(b[0].z-z-.1),b[1].clone().addScalar(pad).setZ(b[1].z+z+.1)]);}return out;}
+const rowCells=(t,h)=>{const a=[];for(let w=0;w<t.W;w++)a.push([0,h,w]);return a;};
+const colCells=(t,w)=>{const a=[];for(let h=0;h<t.H;h++)a.push([0,h,w]);return a;};
+const LATIDS=['z0','eps','zt','vt','vhat','vun','vg','x0h','zk','x0k'];
+function related(t,c,h,w){
+  const out=[];const latCol=(id,lh,lw)=>{const a=[];for(let cc=0;cc<C;cc++)a.push([cc,lh,lw]);out.push([T[id],a]);};
+  const imgBlock=(id,lh,lw,s=4)=>{const a=[];for(let cc=0;cc<3;cc++)for(let y=0;y<s;y++)for(let x=0;x<s;x++)a.push([cc,lh*s+y,lw*s+x]);out.push([T[id],a]);};
+  const tokOf=(lc,lh,lw)=>[0,(lh>>1)*G+(lw>>1),lc*4+(lh&1)*2+(lw&1)];
+  if(t.id==='img')latCol('z0',h>>2,w>>2);
+  else if(t.id==='out'||t.id==='zkimg')latCol('zk',h>>2,w>>2);
+  else if(t.id==='x0kimg')latCol('x0k',h>>2,w>>2);
+  else if(LATIDS.includes(t.id)){
+    if(['zk','x0k'].includes(t.id)){out.push([T[t.id==='zk'?'x0k':'zk'],[[c,h,w]]]);imgBlock(t.id==='zk'?'zkimg':'x0kimg',h,w);}
+    else{for(const id of ['z0','eps','zt'])if(id!==t.id)out.push([T[id],[[c,h,w]]]);imgBlock('img',h,w);
+      out.push([T[['vhat','vun','vg','x0h','vt'].includes(t.id)?'otok':'tok'],[tokOf(c,h,w)]]);if(t.id!=='vhat'&&t.id!=='z0'&&t.id!=='eps'&&t.id!=='zt')out.push([T.vhat,[[c,h,w]]]);}}
+  else if(t.id==='tok'){const lc=w>>2,lh=((h>>3)<<1)+((w>>1)&1),lw=((h&7)<<1)+(w&1);out.push([T.zt,[[lc,lh,lw]]]);out.push([T.hid,rowCells(T.hid,h)]);imgBlock('img',h>>3,h&7,8);}
+  else if(t.id==='otok'){const lc=w>>2,lh=((h>>3)<<1)+((w>>1)&1),lw=((h&7)<<1)+(w&1);out.push([T.vhat,[[lc,lh,lw]]]);}
+  else if(t.id==='hid'||t.id==='pos'){out.push([T.tok,rowCells(T.tok,h)]);out.push([T.attn,rowCells(T.attn,NTXT+h)]);imgBlock('img',h>>3,h&7,8);if(t.id==='hid')out.push([T.pos,rowCells(T.pos,h)]);}
+  else if(t.id==='res'){for(let l=0;l<5;l++){const a=[];for(let ww=0;ww<D;ww++)a.push([l,h,ww]);out.push([T.res,a]);}imgBlock('img',h>>3,h&7,8);}
+  else if(t.id==='attn'){const tr=i=>i<NTXT?[T.txt,rowCells(T.txt,i)]:[T.hid,rowCells(T.hid,i-NTXT)];out.push(tr(h),tr(w));if(w>=NTXT)imgBlock('img',(w-NTXT)>>3,(w-NTXT)&7,8);}
+  else if(t.id==='txt'){out.push([T.attn,rowCells(T.attn,h)]);out.push([T.attn,colCells(T.attn,h)]);}
+  else if(t.id==='amap'){const n=h*8+w;out.push([T.hid,rowCells(T.hid,n)]);out.push([T.attn,[[0,state.query,NTXT+n]]]);imgBlock('img',h,w,8);}
+  return out;
+}
+const tokName=i=>i<NTXT?`"${PROMPT[i]}"`:`image patch (${(i-NTXT)>>3},${(i-NTXT)&7}) · ${tokRegionName(i-NTXT)}`;
+function describe(t,c,h,w,v){
+  let s=`<b>${t.title}</b>\nindex [c=${c}, h=${h}, w=${w}]   value = ${v.toFixed(4)}\n`;
+  if(t.id==='img'||t.kind==='rgb')s+=`pixel (row ${h}, col ${w}) · ${'RGB'[c]} channel\n→ summarised by latent cell (${h>>2}, ${w>>2})`;
+  else if(LATIDS.includes(t.id))s+=`latent channel ${c} (toy meaning: ${CHNAME[c]})\nspatial cell (${h}, ${w}) ← pixels ${h*4}–${h*4+3}, ${w*4}–${w*4+3}\n→ token ${(h>>1)*G+(w>>1)}, dim ${c*4+(h&1)*2+(w&1)}`;
+  else if(t.id==='tok'||t.id==='otok')s+=`token ${h} = patch (${h>>3}, ${h&7}) · ${tokRegionName(h)}\ndim ${w} ← latent ch ${w>>2}, sub-pixel (${(w>>1)&1}, ${w&1})`;
+  else if(t.id==='hid'||t.id==='pos')s+=`token ${h} = patch (${h>>3}, ${h&7}) · ${tokRegionName(h)}\nhidden dim ${w}`;
+  else if(t.id==='attn')s+=`query: ${tokName(h)}\nkey:   ${tokName(w)}\n${(v*100).toFixed(2)}% of this query’s attention\n<i>click to make this row the selected query</i>`;
+  else if(t.id==='amap')s+=`patch (${h}, ${w}) · ${tokRegionName(h*8+w)}\nattention from ${tokName(state.query)}`;
+  else if(t.id==='txt')s+=`token "${PROMPT[h]}", dim ${w}\n<i>click to select as query</i>`;
+  else if(t.id==='res')s+=(c===0?'input to block 1':`after block ${c}`)+`\ntoken ${h} (${tokRegionName(h)}), dim ${w}`;
+  else if(t.id==='ada')s+=`${ADAN[h]} for hidden dim ${w}`;
+  else if(t.id==='temb')s+=w<24?`cos(1000·t·f${w})`:`sin(1000·t·f${w-24})`;
+  return s;
+}
+
+/* =====================================================================
+   3. Interaction: picking, camera, keyboard
+   ===================================================================== */
+const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();let mouseDirty=false,mouseIn=false,hover=null;
+const tip=document.getElementById('tip');
+renderer.domElement.addEventListener('pointermove',e=>{const r=renderer.domElement.getBoundingClientRect();mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);mouseDirty=true;mouseIn=true;tip.style.left=(e.clientX-r.left+14)+'px';tip.style.top=(e.clientY-r.top+14)+'px';});
+renderer.domElement.addEventListener('pointerleave',()=>{mouseIn=false;hover=null;tip.style.display='none';setBoxes(hoverHL,[]);setBoxes(relHL,[]);});
+function pick(){
+  ray.setFromCamera(mouse,cam);const meshes=TL.filter(t=>t.mesh.visible&&(t.focused||!state.dim)).map(t=>t.mesh);
+  const hit=ray.intersectObjects(meshes,false)[0];
+  if(!hit||hit.instanceId===undefined){hover=null;tip.style.display='none';setBoxes(hoverHL,[]);setBoxes(relHL,[]);return;}
+  const t=hit.object.userData.tv,i=hit.instanceId,HWl=t.H*t.W,c=(i/HWl)|0,r=i-c*HWl,h=(r/t.W)|0,w=r-h*t.W;
+  hover={t,c,h,w};tip.innerHTML=describe(t,c,h,w,t.data[i]);tip.style.display='block';
+  setBoxes(hoverHL,boxesFor(t,[[c,h,w]],.62));
+  const rb=[];for(const[tt,cells]of related(t,c,h,w))rb.push(...boxesFor(tt,cells,.55));setBoxes(relHL,rb);
+}
+let downAt=null;
+renderer.domElement.addEventListener('pointerdown',e=>{downAt=[e.clientX,e.clientY];});
+renderer.domElement.addEventListener('pointerup',e=>{if(!downAt||Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1])>4||e.button!==0)return;
+  if(!hover)return;const{t,h,w}=hover;
+  if(t.id==='attn')selectQuery(h);else if(t.id==='txt')selectQuery(h);else if(t.id==='hid'||t.id==='pos'||t.id==='tok')selectQuery(NTXT+h);else if(t.id==='amap')selectQuery(NTXT+h*8+w);});
+renderer.domElement.addEventListener('dblclick',()=>{if(hover)focusTensors([hover.t.id]);});
+
+const V=THREE.Vector3;
+const VIEWS={iso:new V(.75,.5,1),front:new V(0,0,1),top:new V(0,1,.0001),side:new V(1,.08,.0001)};
+let camAnim=null;
+function boundsOf(ids){const b=new THREE.Box3();for(const id of ids){const t=T[id];const mn=t.gto.clone().sub(t.size.clone().multiplyScalar(.5)),mx=t.gto.clone().add(t.size.clone().multiplyScalar(.5));mn.y-=t.preview?50:0;mx.y+=8;b.expandByPoint(mn);b.expandByPoint(mx);}return b;}
+function flyToBox(box,dir){
+  if(!dir)dir=cam.position.clone().sub(ctl.target).normalize();dir=dir.clone().normalize();
+  const ctr=box.getCenter(new V());
+  const upW=Math.abs(dir.y)>.99?new V(0,0,-1):new V(0,1,0);const right=upW.clone().cross(dir).normalize(),up=dir.clone().cross(right).normalize();
+  let hw=0,hh=0,dz=0;for(let k=0;k<8;k++){const p=new V(k&1?box.max.x:box.min.x,k&2?box.max.y:box.min.y,k&4?box.max.z:box.min.z).sub(ctr);hw=Math.max(hw,Math.abs(p.dot(right)));hh=Math.max(hh,Math.abs(p.dot(up)));dz=Math.max(dz,Math.abs(p.dot(dir)));}
+  hw=Math.max(hw,8)*1.08;hh=Math.max(hh,8)*1.12;
+  const asp=stage.clientWidth/Math.max(1,stage.clientHeight),tv=Math.tan(THREE.MathUtils.degToRad(FOV)/2),th=tv*asp;
+  const dist=Math.max(hw/th,hh/tv)+dz;
+  const toPos=ctr.clone().addScaledVector(dir,dist);
+  const needH=Math.max(2*hh,2*hw/asp);
+  camAnim={u:0,fp:cam.position.clone(),tp:toPos,ft:ctl.target.clone(),tt:ctr,fz:ortho.zoom,tz:ORTHO_H/needH};
+}
+function focusTensors(ids,dir){flyToBox(boundsOf(ids),dir);}
+function setOrtho(on){
+  if(on===state.ortho)return;const dir=cam.position.clone().sub(ctl.target),dist=dir.length(),tan=Math.tan(THREE.MathUtils.degToRad(FOV)/2);
+  if(on){ortho.position.copy(persp.position);ortho.zoom=ORTHO_H/(2*dist*tan);ctlO.target.copy(ctlP.target);cam=ortho;ctl=ctlO;}
+  else{const visH=ORTHO_H/ortho.zoom,d=visH/(2*tan);persp.position.copy(ctlO.target).addScaledVector(dir.normalize(),d);ctlP.target.copy(ctlO.target);cam=persp;ctl=ctlP;}
+  ctlP.enabled=!on;ctlO.enabled=on;ortho.updateProjectionMatrix();state.ortho=on;
+  document.querySelectorAll('[data-cam]').forEach(b=>b.classList.toggle('on',(b.dataset.cam==='ortho')===on));
+}
+const keys={};
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;keys[e.code]=true;
+  if(e.code==='ArrowRight')goChapter(state.chapter+1);if(e.code==='ArrowLeft')goChapter(state.chapter-1);if(e.code==='KeyF')fitChapter();});
+addEventListener('keyup',e=>{keys[e.code]=false;});
+function flyKeys(dt){
+  const f=(keys.KeyW?1:0)-(keys.KeyS?1:0),r=(keys.KeyD?1:0)-(keys.KeyA?1:0),u=(keys.KeyE?1:0)-(keys.KeyQ?1:0);if(!f&&!r&&!u)return;
+  camAnim=null;const fwd=ctl.target.clone().sub(cam.position);const dist=state.ortho?ORTHO_H/ortho.zoom:fwd.length();fwd.normalize();
+  const right=fwd.clone().cross(cam.up).normalize(),up=right.clone().cross(fwd).normalize(),sp=dist*.7*dt;
+  const mv=right.multiplyScalar(r*sp).addScaledVector(up,u*sp);
+  if(state.ortho){ortho.zoom*=1+f*dt*1.2;ortho.updateProjectionMatrix();}else mv.addScaledVector(fwd,f*sp);
+  cam.position.add(mv);ctl.target.add(mv);
+}
+
+/* =====================================================================
+   4. Animations: layout tween, morphs (patchify), sweeps (VAE), sampler
+   ===================================================================== */
+let morph=null;
+function startMorph(srcId,dstId,map){
+  if(morph||layoutU<1)return;const s=T[srcId],d=T[dstId],n=s.n;
+  const mat=new THREE.MeshLambertMaterial();const mesh=new THREE.InstancedMesh(BOX,mat,n);mesh.frustumCulled=false;
+  mesh.instanceColor=new THREE.InstancedBufferAttribute(s.mesh.instanceColor.array.slice(),3);scene.add(mesh);
+  const P0=new Float32Array(n*3),P1=new Float32Array(n*3),delay=new Float32Array(n),p=new V();
+  for(let i=0;i<n;i++){s.world(i,p);P0.set([p.x,p.y,p.z],3*i);const j=map(i);d.world(j,p);P1.set([p.x,p.y,p.z],3*i);delay[i]=(j/d.n)*.55;}
+  s.mesh.visible=false;d.mesh.visible=false;morph={mesh,P0,P1,delay,u:0,dur:3.2,s,d};
+}
+function finishMorph(){if(morph){morph.u=1e9;stepMorph(0);}}
+function stepMorph(dt){
+  if(!morph)return;morph.u+=dt/morph.dur;const{mesh,P0,P1,delay}=morph,M=mesh.instanceMatrix.array,n=P0.length/3;
+  for(let i=0;i<n;i++){let e=Math.min(1,Math.max(0,(morph.u-delay[i])/.42));e=e<.5?2*e*e:1-Math.pow(-2*e+2,2)/2;const arc=Math.sin(Math.PI*e)*14;
+    const o=i*16;M.fill(0,o,o+16);M[o]=M[o+5]=M[o+10]=.82;M[o+15]=1;M[o+12]=P0[3*i]+(P1[3*i]-P0[3*i])*e;M[o+13]=P0[3*i+1]+(P1[3*i+1]-P0[3*i+1])*e+arc*.4;M[o+14]=P0[3*i+2]+(P1[3*i+2]-P0[3*i+2])*e+arc;}
+  mesh.instanceMatrix.needsUpdate=true;
+  if(morph.u>=1){scene.remove(mesh);mesh.geometry!==BOX&&mesh.geometry.dispose();mesh.material.dispose();morph.s.mesh.visible=true;morph.d.mesh.visible=true;morph=null;}
+}
+const patchMap=i=>{const c=(i/HW_LAT)|0,r=i%HW_LAT,h=(r/LS)|0,w=r%LS;return((h>>1)*G+(w>>1))*PD+c*4+(h&1)*2+(w&1);};
+const unpatchMap=i=>{const n=(i/PD)|0,d=i%PD,c=d>>2,h=((n>>3)<<1)+((d>>1)&1),w=((n&7)<<1)+(d&1);return c*HW_LAT+h*LS+w;};
+
+let sweep=null;
+function startSweep(kind){
+  if(sweep)endSweep();
+  if(kind==='enc'){sweep={kind,k:0,acc:0,lat:T.z0,img:T.img};T.z0.reveal=(c,h,w)=>h*LS+w<=sweep.k;}
+  else{state.k=state.N;setStepData();refreshStep();sweep={kind,k:0,acc:0,lat:T.zk,img:T.out};T.out.reveal=(c,h,w)=>((h>>2)*LS+(w>>2))<=sweep.k;}
+}
+function endSweep(){if(!sweep)return;sweep.lat.reveal=null;sweep.img.reveal=null;sweep.lat.refresh();sweep.img.refresh();sweep=null;setBoxes(selHL,[]);updateSelection();}
+function stepSweep(dt){
+  if(!sweep)return;sweep.acc+=dt*48;const prev=sweep.k;sweep.k=Math.min(255,Math.floor(sweep.acc));
+  if(sweep.k!==prev||sweep.acc<1){const by=sweep.k>>4,bx=sweep.k&15;const a=[];for(let c=0;c<3;c++)for(let y=0;y<4;y++)for(let x=0;x<4;x++)a.push([c,by*4+y,bx*4+x]);
+    const l=[];for(let c=0;c<C;c++)l.push([c,by,bx]);setBoxes(selHL,[...boxesFor(sweep.img,a,.55),...boxesFor(sweep.lat,l,.6)]);
+    (sweep.kind==='enc'?sweep.lat:sweep.img).refresh();}
+  if(sweep.acc>=258)endSweep();
+}
+let playAcc=0;
+function stepPlay(dt){if(!state.playing)return;playAcc+=dt;if(playAcc>.22){playAcc=0;if(state.k>=state.N){state.playing=false;syncCtrls();return;}state.k++;setStepData();refreshStep();syncCtrls();}}
+
+/* =====================================================================
+   5. Refresh helpers
+   ===================================================================== */
+const FWD_IDS=['zt','tok','hid','attn','amap','res','otok','vhat','vt','vun','vg','x0h','temb','cvec','ada'];
+function refreshForward(){for(const id of FWD_IDS)T[id].refresh();updateSelection();}
+function refreshStep(){for(const id of ['zk','x0k','zkimg','x0kimg'])T[id].refresh();}
+function refreshAll(){for(const t of TL)t.refresh();}
+function selectQuery(q){state.query=q;computeAmap();T.amap.refresh();updateSelection();if(chCtl.onQuery)chCtl.onQuery();}
+function updateSelection(){
+  if(sweep)return;const q=state.query,b=[...boxesFor(T.attn,rowCells(T.attn,q),.6)];
+  if(q<NTXT)b.push(...boxesFor(T.txt,rowCells(T.txt,q),.6));else b.push(...boxesFor(T.hid,rowCells(T.hid,q-NTXT),.6));
+  setBoxes(selHL,['attention','text'].includes(CH[state.chapter].id)?b:[]);
+}
+
+/* =====================================================================
+   6. Chapters
+   ===================================================================== */
+const tn=(id,txt)=>`<span class="tn" data-f="${id}">${txt}</span>`;
+const real=h=>`<div class="box real"><b class="h">In a real model</b>${h}</div>`;
+const toy=h=>`<div class="box toy"><b class="h">Toy simplification</b>${h}</div>`;
+const tryit=h=>`<div class="box try"><b class="h">Try this</b>${h}</div>`;
+const act=(a,l)=>`<button class="act" data-act="${a}">${l}</button>`;
+let chCtl={};
+function sliderRow(parent,label,min,max,step,get,set,fmt){const r=document.createElement('div');r.className='row';
+  r.innerHTML=`<span class="lab">${label}</span><input type="range" min="${min}" max="${max}" step="${step}"><span class="val"></span>`;
+  const inp=r.querySelector('input'),val=r.querySelector('.val');const sync=()=>{inp.value=get();val.textContent=fmt(+get());};
+  inp.addEventListener('input',()=>{set(+inp.value);val.textContent=fmt(+inp.value);});sync();parent.appendChild(r);return sync;}
+function btn(parent,label,fn,primary){const b=document.createElement('button');b.className='btn'+(primary?' primary':'');b.textContent=label;b.onclick=fn;parent.appendChild(b);return b;}
+function btnRow(parent){const d=document.createElement('div');d.className='btnrow';parent.appendChild(d);return d;}
+function readout(parent){const d=document.createElement('div');d.className='readout';parent.appendChild(d);return d;}
+const syncers=[];function syncCtrls(){for(const s of syncers)s();}
+function tSlider(el){syncers.push(sliderRow(el,'noise level t',0,1,.01,()=>state.t,v=>{state.t=v;computeForward();refreshForward();syncCtrls();},v=>v.toFixed(2)+(v===0?' clean':v===1?' noise':'')));}
+function wSlider(el){syncers.push(sliderRow(el,'guidance w',0,6,.1,()=>state.w,v=>{state.w=v;computeForward();refreshForward();computeSampling();refreshStep();T.out.refresh();syncCtrls();},v=>v.toFixed(1)+(v===1?' (off)':'')));}
+function seedBtn(row){btn(row,'New noise seed',()=>{state.seed++;EPS=gauss(rng(state.seed*7919),C*HW_LAT);S.eps=EPS;computeForward();computeSampling();T.eps.refresh();refreshForward();refreshStep();T.out.refresh();});}
+function mse(a,b){let s=0;for(let i=0;i<a.length;i++)s+=(a[i]-b[i])**2;return s/a.length;}
+
+const CH=[
+{id:'overview',k:'00 · Orientation',title:'The big picture',focus:'all',dir:'iso',html:`
+<p>A modern text-to-image model (Stable Diffusion 3, Flux and their relatives) never paints pixels directly. It <b>compresses</b> the image into a small latent tensor, learns to <b>remove noise</b> from that latent with a transformer that is told the prompt and the noise level, then <b>decodes</b> the result back to pixels.</p>
+<p>Every block in the scene is a tensor, and <b>every cube is one number</b>. The middle lane is the main data path, the top lane is conditioning (text and time), and the bottom lane is the sampling loop that generates an image.</p>
+<p><b>Four ways to look at a tensor</b> (toolbar, top):</p>
+<p>• <b>3D volume</b>: a C×H×W block, channels stacked in depth.<br>• <b>Z-slices</b>: each channel is a constant-z square, pulled apart so you can see between them.<br>• <b>2D tiles</b>: channels laid side by side, the way papers draw them.<br>• <b>Height</b>: the tiles again, but each value becomes a column you can read from any angle.</p>
+${tryit(`Orbit with the mouse, fly with <b>W A S D Q E</b>, and hover any cube to read its value. The orange outlines show where that number came from and where it goes. Click a ${tn('z0','tensor name')} in the text to fly to it.`)}
+${toy(`Sizes are shrunk (64×64 image, 8-channel latent, 48-wide transformer) so every number fits on screen. Blue boxes give the real sizes. Data and shapes are computed live in your browser; the network weights are random or hand-built, not trained.`)}
+`},
+{id:'pixels',k:'01 · Input',title:'Pixels: the image tensor x',focus:['img'],html:`
+<p>An image is a 3-D tensor of shape <b>channels × height × width</b>. Here ${tn('img','x')} is 3 × 64 × 64 = 12,288 numbers between 0 and 1. Red, green and blue are three separate 64×64 planes.</p>
+<p>In <b>3D volume</b> you only see the front (red) plane. Switch to ${act('mode:slices','Z-slices')} to pull R, G and B apart, or ${act('mode:tiles','2D tiles')} to see them side by side. The flat picture under the tensor is the same data shown as a normal image.</p>
+${real(`A 1024×1024 RGB image is 3 × 1024 × 1024 ≈ <b>3.1 million</b> numbers, and models scale pixels to [−1, 1]. Running attention over a million pixel positions is far too expensive. That is why the next step exists.`)}
+`},
+{id:'vae',k:'02 · Compression',title:'VAE encoder → latent z₀',focus:['img','z0'],html:`
+<p>The <b>VAE encoder</b> turns each 4×4 block of pixels (4·4·3 = 48 numbers) into one latent cell of <b>8 channels</b>. The 64×64 image becomes ${tn('z0','z₀')} with shape 8 × 16 × 16 = 2,048 numbers. That is 6× fewer values, and the space is 16× smaller in area.</p>
+<p>From here until the very last step, <b>all the diffusion happens in this latent space</b>. The transformer never sees a pixel.</p>
+${tryit(`${act('sweep:enc','▶ Run encoder sweep')} to watch each block get summarised. Then hover a latent cube to see its 4×4 pixel footprint.`)}
+${toy(`Our encoder is linear. Channels 0–2 hold the block's mean colour, and channels 3–7 measure brightness patterns (x-gradient, y-gradient, saddle, checker, bowl). It's like a tiny JPEG. Each channel is then standardised to mean 0, std 1.`)}
+${real(`SD3 and Flux use a deep convolutional VAE with <b>8× downsampling and 16 channels</b>: 1024² × 3 → 128 × 128 × 16 ≈ 262k numbers. The learned channels have no clean human meaning. A fixed shift and scale makes the latents roughly N(0, 1), which is what makes them compatible with unit-variance noise.`)}
+`},
+{id:'noise',k:'03 · Training view',title:'Noise ε and the forward process',focus:['z0','eps','zt','vt'],html:`
+<p>Diffusion training destroys data on purpose. Draw noise ${tn('eps','ε')} with the same shape as ${tn('z0','z₀')}, pick a noise level <b>t ∈ [0, 1]</b>, and blend the two:</p>
+<div class="eq">z_t = (1 − t) · z₀  +  t · ε        (rectified flow)
+v   = ε − z₀                      (training target)</div>
+<p>${tn('zt','z_t')} moves along a straight line from data (t = 0) to pure noise (t = 1). The network is shown z_t and t and must predict the <b>velocity</b> ${tn('vt','v')}, the direction of that line. Because the line is straight, v is the same at every t.</p>
+${tryit(`Drag <b>t</b> and watch z_t dissolve. Switch to ${act('mode:height','Height')} to see the distribution widen into noise.`)}
+${real(`Training repeats this with billions of (image, caption, t, ε) samples. The loss is the mean squared error ‖v̂ − v‖². Older models (DDPM, SD 1.5) used a curved noise schedule and predicted ε instead of v, but the data flow is the same.`)}
+`,ctrls:el=>{tSlider(el);seedBtn(btnRow(el));}},
+{id:'patchify',k:'04 · Tokenise',title:'Patchify: from grid to sequence',focus:['zt','tok'],html:`
+<p>Transformers consume a <b>sequence of vectors</b>, not a grid. <b>Patchify</b> cuts ${tn('zt','z_t')} into 2×2 spatial patches. Each patch keeps all 8 channels, giving 2·2·8 = 32 numbers. That makes the 16×16 grid an 8×8 = <b>64-token</b> sequence in raster order: ${tn('tok','tokens')} of shape 64 × 32.</p>
+<p>This is a pure <b>reshape</b>, with no arithmetic. Every number keeps its value. Hover a token cube to see exactly which latent cell and sub-pixel it came from.</p>
+${tryit(`${act('morph:patch','▶ Animate patchify')}. In ${act('mode:volume','3D volume')} you can watch each 2×2×8 column flatten into one row.`)}
+${real(`A 128×128 latent with patch size 2 becomes <b>4,096 tokens</b> of 16·2·2 = 64 values. The token count grows with the square of the resolution. Doubling the image side gives 4× the tokens and about 16× the attention cost.`)}
+`,ctrls:el=>{tSlider(el);}},
+{id:'embed',k:'05 · Embed',title:'Patch embedding + position',focus:['tok','pos','hid'],html:`
+<p>Each 32-value token is projected by a learned matrix to the transformer's <b>hidden width</b> (48 here). Then a ${tn('pos','position embedding')} is added so the model knows where each patch sits:</p>
+<div class="eq">h = tokens · W_embed  +  pos        (64×32)·(32×48) + (64×48)</div>
+<p>Attention ignores order, so without position information patch (0,0) and patch (7,7) would look the same. Our ${tn('pos','pos')} uses 2-D sine and cosine waves: the first 24 dims encode the column, the last 24 the row.</p>
+${tryit(`Use ${act('mode:height','Height')} and orbit around ${tn('pos','pos')} to see the waves at different frequencies. Hover a row of ${tn('hid','h')} to light up its pixels.`)}
+${real(`Hidden width is 1,536 in SD3-medium and 3,072 in Flux. SD3 adds 2-D sin/cos embeddings like ours. Flux uses <b>RoPE</b>, which rotates the queries and keys inside attention instead of adding a vector.`)}
+`,ctrls:el=>{tSlider(el);}},
+{id:'text',k:'06 · Condition',title:'Text: the prompt as tokens',focus:['txt'],html:`
+<p>The prompt <i>"${PROMPT.slice(0,11).join(' ')}"</i> is split into tokens. A frozen text encoder turns each token into a vector, and a linear layer projects it to the hidden width. That gives ${tn('txt','text embeddings')}: 12 tokens × 48, one row per word.</p>
+<p>These rows will sit in the <b>same sequence</b> as the image tokens. Then every image patch can look at every word, and the reverse.</p>
+${toy(`Our word vectors are hand-built so "lighthouse" resembles the lighthouse patches, "sea" the sea patches, and so on. That alignment is what training discovers. Function words like "a" and "the" are random.`)}
+${real(`SD3 uses <b>T5-XXL</b> (4,096-d per token) plus two CLIP encoders, whose pooled vectors also feed the conditioning vector c (next chapter). Flux uses T5 with up to 512 tokens plus a pooled CLIP vector.`)}
+`},
+{id:'time',k:'07 · Condition',title:'Timestep → adaLN modulation',focus:['temb','cvec','ada'],html:`
+<p>The same weights must denoise at every noise level, so the network is told <b>t</b>. The flow is:</p>
+<div class="eq">t ─► sin/cos at 24 frequencies   (temb, 48)
+  ─► MLP                         (c, 48)
+  ─► per-block linear            (6 × 48)
+     shift₁ scale₁ gate₁ │ shift₂ scale₂ gate₂</div>
+<p>Inside each block, before attention and before the MLP, the tokens are normalised and then <b>modulated</b>:</p>
+<div class="eq">h' = LayerNorm(h) · (1 + scale) + shift
+h  = h + gate · SubLayer(h')</div>
+${tryit(`Drag <b>t</b> and watch ${tn('temb','temb')} cycle through its frequencies, and ${tn('ada','the adaLN parameters')} change. The noise level controls how every block behaves.`)}
+${real(`This is <b>adaLN-Zero</b> from the DiT paper. The gate weights start at zero, so every block begins as the identity function, which makes deep stacks stable to train. The pooled text vector is added into c, so global prompt information flows through the same path.`)}
+`,ctrls:el=>{tSlider(el);}},
+{id:'attention',k:'08 · Mix',title:'Joint attention: text ↔ image',focus:['hid','txt','attn','amap'],html:`
+<p>Text rows and image rows are concatenated into one sequence of 12 + 64 = <b>76 tokens</b> (MM-DiT "joint attention"). Each token makes a query q, a key k and a value v. The attention matrix ${tn('attn','A')} says how much each query (row) reads from each key (column):</p>
+<div class="eq">A = softmax( Q·Kᵀ / √d )      (76×24)·(24×76) → 76×76
+out = A · V</div>
+<p>The four quadrants (split by gaps): <b>top-left</b> text→text, <b>top-right</b> text→image, <b>bottom-left</b> image→text (how the prompt steers each patch), <b>bottom-right</b> image→image.</p>
+<div id="qchips" class="btnrow"></div>
+${tryit(`Pick a word above, or click any row of A or any token of ${tn('hid','h')}. ${tn('amap','The 8×8 map')} shows where that query looks in the image. Then drag <b>t</b> toward 1: noisy image tokens give blurry, unfocused attention.`)}
+${real(`At 1024², 4,096 image tokens plus 512 text tokens give a 4,608² ≈ 21 million-entry matrix per head, per layer. FlashAttention computes it in tiles so the full matrix is never stored.`)}
+`,ctrls:el=>{tSlider(el);const bars=document.createElement('div');bars.className='bars';el.appendChild(bars);const ro=readout(el);
+  const draw=()=>{const NS=NTXT+NT,q=state.query;let tx=0;bars.innerHTML='';for(let j=0;j<NTXT;j++){const v=S.attn[q*NS+j];tx+=v;bars.innerHTML+=`<span>${PROMPT[j]}</span><div class="b" style="width:${Math.max(.5,v*100*2.2)}%"></div><span class="n">${(v*100).toFixed(1)}%</span>`;}
+    ro.innerHTML=`query <b>${tokName(q)}</b> · ${(tx*100).toFixed(0)}% on text, ${(100-tx*100).toFixed(0)}% on image`;
+    document.querySelectorAll('.wchip').forEach(b=>b.classList.toggle('on',+b.dataset.q===q));};
+  chCtl.onQuery=draw;syncers.push(draw);
+  const qc=document.getElementById('qchips');PROMPT.forEach((w,i)=>{const b=document.createElement('button');b.className='wchip';b.textContent=w;b.dataset.q=i;b.onclick=()=>selectQuery(i);qc.appendChild(b);});draw();}},
+{id:'stack',k:'09 · Depth',title:'The transformer stack',focus:['hid','res','ada'],html:`
+<p>One DiT block is attention followed by an MLP, each wrapped in adaLN and a residual add:</p>
+<div class="eq">h = h + gate₁ · Attn( mod₁(LN(h)) )
+h = h + gate₂ · MLP ( mod₂(LN(h)) )      48 → 96 → 48</div>
+<p>The ${tn('res','residual stream')} stacks the image tokens after each block: layer × token × dim = 5 × 64 × 48. Channel 0 is the input h; channel 4 is after the last block. The shape never changes. Blocks only <b>add</b> refinements to the stream.</p>
+${tryit(`${act('mode:slices','Z-slices')} turns the layers into a flip-book. Orbit to the side to compare them. Turn on ${act('mode:tiles','2D tiles')} to read them left to right.`)}
+${toy(`4 blocks with random weights, reusing one attention pattern. The shapes and wiring are faithful, but the values carry no learned meaning.`)}
+${real(`SD3-medium has 24 joint blocks. Flux has 19 "double-stream" blocks (separate weights for text and image, joint attention) followed by 38 "single-stream" blocks over the merged sequence. That's about 12 billion parameters.`)}
+`,ctrls:el=>{tSlider(el);}},
+{id:'output',k:'10 · Predict',title:'Output: the predicted velocity v̂',focus:['otok','vhat','vt','x0h'],html:`
+<p>A final LayerNorm, modulation and linear layer map each 48-wide token back to 32 numbers: ${tn('otok','output tokens')}. <b>Unpatchify</b> is the exact inverse reshape and rebuilds the latent grid ${tn('vhat','v̂')} (8 × 16 × 16).</p>
+<p>During training, v̂ is compared with the target ${tn('vt','v = ε − z₀')}. During generation, v̂ also gives the model's current guess of the clean image:</p>
+<div class="eq">x̂₀ = z_t − t · v̂</div>
+${tryit(`${act('morph:unpatch','▶ Animate unpatchify')}. Then drag <b>t</b>: at high noise ${tn('x0h','x̂₀')} is a blurry average, and near t = 0 it sharpens.`)}
+${toy(`Our v̂ comes from an "oracle" that knows z₀ but sees it more blurred at higher t. That copies a real trait: trained models settle coarse layout early and fine detail late.`)}
+`,ctrls:el=>{tSlider(el);const ro=readout(el);const f=()=>{ro.innerHTML=`training loss  MSE(v̂, v) = <b>${mse(S.vhat,S.vt).toFixed(4)}</b>`;};syncers.push(f);f();}},
+{id:'cfg',k:'11 · Steer',title:'Classifier-free guidance',focus:['vhat','vun','vg'],html:`
+<p>At generation time the network is usually run <b>twice per step</b>: once with the prompt (${tn('vhat','v̂')}) and once with an empty prompt (${tn('vun','v̂∅')}). The difference points toward "more like the prompt". Guidance extrapolates along it:</p>
+<div class="eq">v̂_cfg = v̂∅ + w · (v̂ − v̂∅)</div>
+<p>w = 1 is the plain conditional prediction. w > 1 pushes harder, which gives better prompt adherence, more contrast and saturation and less variety. Push it too far and colours burn out.</p>
+${tryit(`Drag <b>w</b> and compare ${tn('vg','v̂_cfg')} with v̂. Then jump to the ${act('chapter:sampling','sampling loop')} and look at the final image.`)}
+${real(`Typical w is 3.5–7 for SD3. Flux-dev is <b>guidance-distilled</b>: w is passed in as another embedding (like t), so a single forward pass imitates the two-pass result.`)}
+`,ctrls:el=>{tSlider(el);wSlider(el);}},
+{id:'sampling',k:'12 · Generate',title:'The sampling loop',focus:['zk','zkimg','x0k','x0kimg','out'],html:`
+<p>Generation runs the flow in reverse. Start from pure noise z = ε at t = 1. At each step, run the whole network from chapters 4–11 and take a small Euler step against the predicted velocity:</p>
+<div class="eq">for k in 0 … N−1:
+    v = model(z_k, t_k, prompt)        # with CFG
+    z_{k+1} = z_k − (t_k − t_{k+1}) · v</div>
+<p>${tn('zk','z_k')} is the state. ${tn('zkimg','decode(z_k)')} shows what it looks like in pixels, and ${tn('x0kimg','decode(x̂₀)')} shows the model's running guess of the final image. Watch it go from blurry layout to fine detail.</p>
+${tryit(`Press <b>Play</b>, or scrub <b>step k</b>. Try 4 steps against 40, and shift 1 against 3. Shift spends more steps at high noise, where the layout is decided.`)}
+${toy(`Because our "model" is an oracle that knows one image, every seed ends at the same lighthouse. A trained model maps each seed to a different image that fits the prompt.`)}
+${real(`SD3 uses 28–40 steps with shift 3.0 at 1024², and Flux-schnell needs about 4 steps. Each step is a full transformer pass (two with CFG). That is where nearly all the generation time goes.`)}
+`,ctrls:el=>{
+  const ro=readout(el);
+  syncers.push(sliderRow(el,'step k',0,state.N,1,()=>state.k,v=>{state.k=v;setStepData();refreshStep();syncCtrls();},v=>`${v} / ${state.N}`));
+  const kin=el.lastChild.querySelector('input');
+  syncers.push(sliderRow(el,'steps N',2,50,1,()=>state.N,v=>{state.N=v;kin.max=v;state.k=Math.min(state.k,v);computeSampling();refreshStep();T.out.refresh();syncCtrls();},v=>v));
+  syncers.push(sliderRow(el,'timestep shift',1,6,.1,()=>state.shift,v=>{state.shift=v;computeSampling();refreshStep();T.out.refresh();syncCtrls();},v=>v.toFixed(1)));
+  wSlider(el);
+  const r=btnRow(el);const pb=btn(r,'▶ Play',()=>{if(state.k>=state.N){state.k=0;setStepData();refreshStep();}state.playing=!state.playing;syncCtrls();},true);
+  btn(r,'⟲ Reset to noise',()=>{state.playing=false;state.k=0;setStepData();refreshStep();syncCtrls();});seedBtn(r);
+  const f=()=>{kin.max=state.N;pb.textContent=state.playing?'❚❚ Pause':'▶ Play';ro.innerHTML=`step <b>${state.k}</b>/${state.N} · t = <b>${TS[state.k].toFixed(3)}</b> · network evaluations so far: <b>${state.k*(state.w===1?1:2)}</b>`;};syncers.push(f);f();}},
+{id:'decode',k:'13 · Output',title:'VAE decoder → pixels',focus:['img','zk','out'],html:`
+<p>When t reaches 0, the final latent ${tn('zk','z')} goes through the <b>VAE decoder</b>. Each latent cell expands back into a 4×4×3 block of pixels, producing ${tn('out','the final image')}. Compare it with the ${tn('img','input')} that started the training story.</p>
+${tryit(`${act('sweep:dec','▶ Run decoder sweep')}, then hover the output to trace any pixel back to its latent cell.`)}
+<p><b>The whole journey, toy vs. real (SD3-class, 1024²):</b></p>
+<table class="shapes"><tr><th>tensor</th><th>toy</th><th>real</th></tr>
+<tr><td>pixels x</td><td>3×64×64</td><td>3×1024×1024</td></tr>
+<tr><td>latent z</td><td>8×16×16</td><td>16×128×128</td></tr>
+<tr><td>image tokens</td><td>64 × 32</td><td>4096 × 64</td></tr>
+<tr><td>hidden h</td><td>64 × 48</td><td>4096 × 1536+</td></tr>
+<tr><td>text tokens</td><td>12 × 48</td><td>~77–512 × 4096→hidden</td></tr>
+<tr><td>attention</td><td>76²</td><td>~4.6k² per head</td></tr>
+<tr><td>blocks</td><td>4</td><td>24–57</td></tr>
+<tr><td>steps</td><td>${state.N}</td><td>4–50</td></tr></table>
+<p>Go back to the ${act('chapter:overview','overview')} and follow the arrows end to end. You now know what every block is.</p>
+`,enter:()=>{state.k=state.N;setStepData();refreshStep();}},
+];
+
+const textEl=document.getElementById('text'),ctrlsEl=document.getElementById('ctrls'),chipsEl=document.getElementById('chips');
+CH.forEach((c,i)=>{const b=document.createElement('button');b.textContent=i;b.title=c.title;b.onclick=()=>goChapter(i);chipsEl.appendChild(b);});
+let curFocus='all';
+function goChapter(i,instant){
+  i=Math.max(0,Math.min(CH.length-1,i));const c=CH[i];state.chapter=i;state.playing=false;if(sweep)endSweep();finishMorph();
+  chipsEl.querySelectorAll('button').forEach((b,j)=>b.classList.toggle('on',j===i));
+  textEl.innerHTML=`<div class="kicker">${c.k}</div><h2>${c.title}</h2>${c.html}`;
+  ctrlsEl.innerHTML='';syncers.length=0;chCtl={};if(c.ctrls)c.ctrls(ctrlsEl);if(c.enter)c.enter();
+  document.getElementById('navinfo').textContent=`${i+1} / ${CH.length}`;
+  document.getElementById('prev').disabled=i===0;document.getElementById('next').textContent=i===CH.length-1?'Restart ↺':'Next →';
+  curFocus=c.focus;labelR.domElement.classList.toggle('compact',c.focus==='all');for(const t of TL)t.setFocus(c.focus==='all'||c.focus.includes(t.id));styleEdges();updateSelection();
+  textEl.querySelector('h2').scrollIntoView({block:'start'});document.getElementById('content').scrollTop=0;
+  fitChapter(c.dir?VIEWS[c.dir]:null);
+  try{if(location.hash.slice(1)!==c.id)history.replaceState(null,'','#'+c.id);}catch(e){}
+}
+function fitChapter(dir){const c=CH[state.chapter];focusTensors(c.focus==='all'?TL.map(t=>t.id):c.focus,dir||null);}
+textEl.addEventListener('click',e=>{const f=e.target.closest('[data-f]');if(f){focusTensors([f.dataset.f]);return;}
+  const a=e.target.closest('[data-act]');if(!a)return;const[k,v]=a.dataset.act.split(':');
+  if(k==='mode')setMode(v);else if(k==='sweep')startSweep(v);else if(k==='chapter')goChapter(CH.findIndex(c=>c.id===v));
+  else if(k==='morph'){if(v==='patch')startMorph('zt','tok',patchMap);else startMorph('otok','vhat',unpatchMap);}});
+document.getElementById('prev').onclick=()=>goChapter(state.chapter-1);
+document.getElementById('next').onclick=()=>goChapter(state.chapter===CH.length-1?0:state.chapter+1);
+addEventListener('hashchange',()=>{const i=CH.findIndex(c=>c.id===location.hash.slice(1));if(i>=0&&i!==state.chapter)goChapter(i);});
+
+/* toolbar */
+function setMode(m){finishMorph();state.mode=m;document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));relayout(true);fitChapter();}
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+document.getElementById('gap').oninput=e=>{state.gap=+e.target.value;if(state.mode!=='slices')setMode('slices');else relayout(false);};
+document.getElementById('cut').oninput=e=>{state.cut=+e.target.value;refreshAll();};
+document.getElementById('mag').onclick=e=>{state.mag=!state.mag;e.currentTarget.classList.toggle('on',state.mag);refreshAll();};
+document.getElementById('dim').onclick=e=>{state.dim=!state.dim;e.currentTarget.classList.toggle('on',state.dim);for(const t of TL)t.setFocus(t.focused);styleEdges();};
+document.getElementById('lbl').onclick=e=>{state.labels=!state.labels;e.currentTarget.classList.toggle('on',state.labels);labelR.domElement.style.display=state.labels?'':'none';};
+document.querySelectorAll('[data-cam]').forEach(b=>b.onclick=()=>setOrtho(b.dataset.cam==='ortho'));
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{const v=b.dataset.view;if(v==='flat'){setOrtho(true);setMode('tiles');fitChapter(VIEWS.front);}else fitChapter(VIEWS[v]);});
+document.getElementById('fit').onclick=()=>fitChapter();
+
+/* =====================================================================
+   7. Main loop
+   ===================================================================== */
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h);labelR.setSize(w,h);persp.aspect=w/h;persp.updateProjectionMatrix();
+  const a=w/h;ortho.left=-ORTHO_H/2*a;ortho.right=ORTHO_H/2*a;ortho.top=ORTHO_H/2;ortho.bottom=-ORTHO_H/2;ortho.updateProjectionMatrix();}
+addEventListener('resize',resize);resize();
+relayout(false);refreshAll();
+const startIdx=Math.max(0,CH.findIndex(c=>c.id===location.hash.slice(1)));
+{const b=boundsOf(TL.map(t=>t.id)),c=b.getCenter(new V());ctlP.target.copy(c);persp.position.copy(c).add(new V(250,200,900));}
+goChapter(startIdx);
+const clock=new THREE.Clock();
+function frame(){
+  const dt=Math.min(.05,clock.getDelta());
+  if(layoutU<1){layoutU=Math.min(1,layoutU+dt/.75);const e=layoutU<.5?4*layoutU**3:1-Math.pow(-2*layoutU+2,3)/2;for(const t of TL){t.place(e);t.refresh();}updateEdges();if(layoutU>=1)updateSelection();}
+  if(camAnim){camAnim.u=Math.min(1,camAnim.u+dt/.9);const e=1-Math.pow(1-camAnim.u,3);cam.position.lerpVectors(camAnim.fp,camAnim.tp,e);ctl.target.lerpVectors(camAnim.ft,camAnim.tt,e);
+    if(state.ortho){ortho.zoom=camAnim.fz+(camAnim.tz-camAnim.fz)*e;ortho.updateProjectionMatrix();}if(camAnim.u>=1)camAnim=null;}
+  flyKeys(dt);stepMorph(dt);stepSweep(dt);stepPlay(dt);
+  ctl.update();
+  if(mouseIn&&(mouseDirty||camAnim||layoutU<1)){mouseDirty=false;pick();}
+  renderer.render(scene,cam);labelR.render(scene,cam);
+  requestAnimationFrame(frame);
+}
+
+frame();
+console.log('[diffusion-tutorial] ready',{tensors:TL.length,instances:TL.reduce((a,t)=>a+t.n,0)});
+</script>
+</body>
+</html>

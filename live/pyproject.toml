@@ -1,0 +1,16 @@
+[project]
+name = "diffusion-live"
+version = "0.1.0"
+description = "Run Stable Diffusion locally on Apple Silicon and stream every tensor of every denoising step to a 3D browser viewer."
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "torch>=2.4",
+    "diffusers>=0.30",
+    "transformers>=4.44",
+    "accelerate>=0.33",
+    "safetensors",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pillow",
+    "numpy",
+]

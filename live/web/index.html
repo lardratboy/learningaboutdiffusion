@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Diffusion, live — Stable Diffusion step by step</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0c12;--panel:#10131c;--panel2:#161a26;--line:#252b3b;--text:#d9deea;--dim:#8a93a8;--accent:#ffb35a;--accent2:#5ac8ff;--good:#7ee0a1;--bad:#ff6b6b;--toy:#c49bff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.55 Inter,system-ui,sans-serif;overflow:hidden}
+#app{display:grid;grid-template-columns:420px 1fr;height:100vh}
+#panel{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+#brand{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
+#brand h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
+#brand p{margin:2px 0 0;color:var(--dim);font-size:12px}
+#conn{font:600 10.5px 'JetBrains Mono',monospace;padding:2px 7px;border-radius:10px;background:#2a1a1a;color:var(--bad);border:1px solid #4a2a2a}
+#conn.ok{background:#0f2219;color:var(--good);border-color:#24503a}
+#conn.wait{background:#2a2210;color:var(--accent);border-color:#4f3f1c}
+#modelinfo{font:11px 'JetBrains Mono',monospace;color:var(--dim);margin-top:4px}
+#content{flex:1;overflow:auto;padding:12px 18px 14px}
+section{margin:0 0 16px}
+section h3{font:600 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin:0 0 8px}
+textarea,input[type=text],input[type=number],select{width:100%;background:#0c0f17;border:1px solid var(--line);border-radius:8px;color:var(--text);font:13px Inter;padding:7px 9px;resize:vertical}
+textarea:focus,input:focus,select:focus{outline:none;border-color:#3d4866}
+label.f{display:block;font-size:11.5px;color:var(--dim);margin:8px 0 3px}
+.row{display:flex;align-items:center;gap:10px;font-size:12.5px;margin-top:6px}
+.row .lab{width:92px;color:var(--dim);flex:none}
+.row input[type=range]{flex:1;accent-color:var(--accent)}
+.row .val{width:64px;text-align:right;font:12px 'JetBrains Mono',monospace;color:#fff;flex:none}
+.row input[type=number]{width:110px;flex:none}
+.row select{flex:1}
+.btnrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.btn{background:#232a3c;border:1px solid #343c54;color:#fff;border-radius:8px;padding:6px 11px;font:500 12.5px Inter;cursor:pointer}
+.btn:hover:not(:disabled){border-color:var(--accent)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.primary{background:var(--accent);color:#1b1206;border-color:var(--accent);font-weight:600}
+.btn.sm{padding:3px 8px;font-size:12px}
+.readout{font:12px 'JetBrains Mono',monospace;color:var(--dim);line-height:1.7}
+.readout b{color:#fff;font-weight:600}
+#prog{height:4px;background:#1a1f2d;border-radius:2px;overflow:hidden;margin:8px 0 2px}
+#prog div{height:100%;width:0;background:var(--accent);transition:width .2s}
+.words{display:grid;grid-template-columns:auto 1fr 44px;gap:2px 8px;font:11.5px 'JetBrains Mono',monospace;align-items:center}
+.words .w{cursor:pointer;padding:1px 6px;border-radius:5px;border:1px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.words .w:hover{border-color:#3a4258}
+.words .w.on{background:var(--accent2);color:#04121d}
+.words .bar{height:9px;background:linear-gradient(90deg,#ffb35a,#ffe08a);border-radius:0 4px 4px 0;min-width:1px;cursor:pointer}
+.words .n{color:var(--dim);text-align:right}
+.spark{position:relative;margin-bottom:6px}
+.spark .hd{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim)}
+.spark .hd b{font:600 11.5px 'JetBrains Mono',monospace;color:#fff}
+.spark canvas{display:block;width:100%;height:42px;cursor:crosshair}
+.spark .tt{position:absolute;pointer-events:none;background:rgba(9,11,17,.96);border:1px solid #2e3650;border-radius:6px;padding:2px 6px;font:11px 'JetBrains Mono',monospace;display:none;white-space:nowrap;top:0;z-index:2}
+.eq{font-family:'JetBrains Mono',monospace;background:#0c0f17;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:8px 0;font-size:11.5px;overflow-x:auto;white-space:pre;line-height:1.6}
+.box{padding:8px 11px;border-radius:0 8px 8px 0;margin:10px 0;font-size:12.5px;line-height:1.5}
+.box b.h{display:block;font:600 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.8px;margin-bottom:2px}
+.real{border-left:3px solid var(--accent2);background:#0e1724}.real b.h{color:var(--accent2)}
+.try{border-left:3px solid var(--good);background:#0d1a14}.try b.h{color:var(--good)}
+.tn{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--accent);cursor:pointer;border-bottom:1px dotted rgba(255,179,90,.5);white-space:nowrap}
+.tn:hover{color:#fff}
+dl.legend{margin:0;font-size:12.5px}dl.legend dt{margin-top:7px}dl.legend dd{margin:0 0 0 2px;color:var(--dim)}
+a{color:var(--accent2)}
+#stage{position:relative;min-width:0;min-height:0;overflow:hidden}
+#stage canvas{display:block}
+#toolbar{position:absolute;top:10px;left:10px;right:10px;display:flex;flex-wrap:wrap;gap:8px;pointer-events:none;z-index:4}
+.grp{pointer-events:auto;background:rgba(16,19,28,.9);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:10px;padding:4px;display:flex;gap:2px;align-items:center;flex-wrap:wrap}
+.grp .gl{font:600 10px 'JetBrains Mono',monospace;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;padding:0 6px}
+.grp button{background:transparent;border:0;color:var(--dim);font:500 12px Inter;padding:5px 9px;border-radius:7px;cursor:pointer}
+.grp button:hover{color:#fff}
+.grp button.on{background:#283048;color:#fff}
+.grp label{font-size:11.5px;color:var(--dim);padding:0 6px;display:flex;gap:6px;align-items:center}
+.grp input[type=range]{width:80px;accent-color:var(--accent)}
+.grp .sep{width:1px;height:18px;background:var(--line);margin:0 3px}
+#tip{position:absolute;pointer-events:none;background:rgba(9,11,17,.96);border:1px solid #2e3650;border-radius:8px;padding:7px 9px;font:11.5px/1.5 'JetBrains Mono',monospace;display:none;max-width:380px;z-index:6;white-space:pre-wrap}
+#tip b{color:var(--accent)}
+#help{position:absolute;bottom:10px;right:10px;color:var(--dim);font-size:11px;background:rgba(16,19,28,.85);padding:6px 10px;border-radius:8px;border:1px solid var(--line);z-index:4}
+#help kbd{font:10.5px 'JetBrains Mono',monospace;background:#232a3c;border-radius:4px;padding:0 4px;color:#fff}
+#legend{position:absolute;bottom:10px;left:10px;font:10.5px 'JetBrains Mono',monospace;color:var(--dim);background:rgba(16,19,28,.85);padding:7px 10px;border-radius:8px;border:1px solid var(--line);display:grid;grid-template-columns:auto 120px;gap:4px 10px;align-items:center;z-index:4}
+#legend .g{height:9px;border-radius:3px}
+#banner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(16,19,28,.94);border:1px solid var(--line);border-radius:12px;padding:16px 20px;max-width:440px;font-size:13px;z-index:5;display:none}
+#banner code{font:12px 'JetBrains Mono',monospace;background:#0c0f17;padding:2px 6px;border-radius:5px;color:var(--accent)}
+.tlabel{pointer-events:none;text-align:center;font:600 12px Inter;color:#fff;text-shadow:0 1px 3px #000,0 0 8px #000;white-space:nowrap;transition:opacity .3s}
+.tlabel span{display:block;font:400 10.5px 'JetBrains Mono',monospace;color:#aab3c8}
+.tlabel.dim{opacity:.25}
+.compact .tlabel span,.compact .elabel,.compact .wlabel{display:none}
+.elabel{pointer-events:none;font:500 10.5px 'JetBrains Mono',monospace;color:#9fb0d0;background:rgba(10,12,18,.75);padding:1px 5px;border-radius:4px;white-space:nowrap;transition:opacity .3s}
+.elabel.dim{opacity:.18}
+.wlabel{pointer-events:none;font:10.5px 'JetBrains Mono',monospace;color:#cfe8ff;text-shadow:0 0 4px #000,0 0 2px #000;white-space:nowrap;transition:opacity .3s}
+.wlabel.q{color:var(--accent2);font-weight:600}
+.wlabel.dim{opacity:.15}
+@media (max-width:860px){#app{grid-template-columns:1fr;grid-template-rows:56vh 44vh}#panel{order:2;border-right:0;border-top:1px solid var(--line)}#stage{order:1}#help,#legend{display:none}.grp .gl{display:none}}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <div id="brand">
+      <h1>Diffusion, live <span id="conn">offline</span></h1>
+      <p>Stable Diffusion running on your own GPU. Every tensor of every denoising step is streamed here as it is computed.</p>
+      <div id="modelinfo">connecting…</div>
+    </div>
+    <div id="content">
+      <section>
+        <h3>Generate</h3>
+        <textarea id="prompt" rows="2" spellcheck="false">a lighthouse on a grassy hill by the sea at sunset</textarea>
+        <label class="f" for="negative">Negative prompt (the "unconditional" pass; empty is classic CFG)</label>
+        <input type="text" id="negative" value="" placeholder="e.g. blurry, low quality">
+        <div class="row"><span class="lab">steps</span><input type="range" id="steps" min="1" max="60" step="1" value="25"><span class="val" id="stepsV"></span></div>
+        <div class="row"><span class="lab">guidance w</span><input type="range" id="guidance" min="0" max="15" step="0.5" value="7.5"><span class="val" id="guidanceV"></span></div>
+        <div class="row"><span class="lab">seed</span><input type="number" id="seed" value="1" min="0"><button class="btn sm" id="dice" title="Random seed">🎲</button></div>
+        <div class="row"><span class="lab">scheduler</span><select id="scheduler"><option value="ddim">DDIM (deterministic)</option><option value="dpm++">DPM-Solver++ 2M (fewer steps)</option></select></div>
+        <div class="btnrow"><button class="btn primary" id="go" disabled>Generate</button><button class="btn" id="stop" disabled>Stop</button></div>
+      </section>
+
+      <section>
+        <h3>Timeline</h3>
+        <div id="prog"><div></div></div>
+        <div class="readout" id="status">waiting for the server…</div>
+        <div class="row"><span class="lab">viewing step</span><input type="range" id="kslider" min="0" max="0" step="1" value="0" disabled><span class="val" id="kV">–</span></div>
+        <div class="btnrow"><button class="btn sm" id="play" disabled>▶ Replay</button><label style="font-size:12px;color:var(--dim);display:flex;gap:6px;align-items:center"><input type="checkbox" id="follow" checked> follow the live step</label></div>
+        <div class="readout" id="stepinfo" style="margin-top:6px"></div>
+      </section>
+
+      <section>
+        <h3>Cross-attention by word</h3>
+        <div class="readout" style="margin-bottom:6px">Share of all image→text attention each token receives (all 16 cross-attention layers, all heads). ⟨start⟩ soaks up most of it: CLIP's first token works as an "attention sink", so bars are scaled to the biggest real word. Click a word to overlay its map.</div>
+        <div class="words" id="words"></div>
+      </section>
+
+      <section>
+        <h3>Signals per step</h3>
+        <div id="sparks"></div>
+      </section>
+
+      <section>
+        <h3>What you are looking at</h3>
+        <div class="eq">ε̂∅, ε̂  = UNet(z_t, t, [negative, prompt])
+ε̂_cfg  = ε̂∅ + w · (ε̂ − ε̂∅)
+x̂₀     = (z_t − √(1−ᾱ_t) · ε̂_cfg) / √ᾱ_t
+z_next = scheduler.step(z_t, ε̂_cfg)</div>
+        <dl class="legend">
+          <dt><span class="tn" data-f="z">z_t</span>: the noisy latent (4 × 64 × 64)</dt><dd>At step 0 this is pure Gaussian noise. It is the only state the sampler carries.</dd>
+          <dt><span class="tn" data-f="eps_u">ε̂∅</span> and <span class="tn" data-f="eps_c">ε̂</span>: predicted noise</dt><dd>The UNet's guess of which part of z_t is noise. ε̂∅ comes from the negative prompt and ε̂ from your prompt. Both run in one batched pass.</dd>
+          <dt><span class="tn" data-f="diff">ε̂ − ε̂∅</span>: what the prompt changes</dt><dd>Tiny compared with ε̂ itself (it is auto-scaled), but it is the whole signal that steers the image.</dd>
+          <dt><span class="tn" data-f="x0">x̂₀</span>: the model's current guess of the final latent</dt><dd>Decoded below as an image. Watch layout settle early and detail arrive late.</dd>
+          <dt><span class="tn" data-f="attn">cross-attention maps</span>: one tile per prompt token</dt><dd>Where in the image each word is being "read", averaged over every head of all 16 cross-attention layers and resampled to 32 × 32.</dd>
+          <dt><span class="tn" data-f="text">prompt embedding</span>: CLIP output, one 768-vector per token</dt><dd>Fixed for the whole run. Each vector is folded into a 24 × 32 tile.</dd>
+          <dt><span class="tn" data-f="temb">timestep embedding</span> and <span class="tn" data-f="mid">UNet bottleneck</span></dt><dd>How t is fed into the network, and the first 64 of 1,280 channels at its narrowest 8 × 8 point.</dd>
+        </dl>
+        <div class="box real"><b class="h">Compared with the walk-through</b>
+          <a href="/diffusion-walk.html" target="_blank">diffusion-walk.html</a> teaches the modern recipe: a DiT transformer, rectified flow, velocity prediction. SD 1.5 is the earlier one. A <b>UNet</b> (conv + attention) predicts <b>noise ε</b> on a variance-preserving schedule:
+          <div class="eq" style="margin:6px 0 2px">walk-through: z_t = (1 − t)·z₀ + t·ε
+SD 1.5:       z_t = √ᾱ_t·z₀ + √(1−ᾱ_t)·ε</div>
+          So √(1−ᾱ) here plays the role of t there. The latent is 4 × 64 × 64 (8× downsampling), and text enters through cross-attention, not a joint sequence. Classifier-free guidance, x̂₀ and the sampling loop are the same idea.
+        </div>
+        <div class="box try"><b class="h">Try this</b>
+          Set guidance to 0, then 15, with the same seed. · Change one word and keep the seed. · Run 4 steps against 40 with DPM-Solver++. · Switch to <b>2D tiles</b> and hover a latent cube: the orange boxes show the same spot in every tensor and its 8 × 8 pixel footprint.
+        </div>
+      </section>
+    </div>
+  </aside>
+  <main id="stage">
+    <div id="toolbar">
+      <div class="grp" id="gMode"><span class="gl">Projection</span>
+        <button data-mode="volume" title="C×H×W block, channels stacked in depth">3D volume</button>
+        <button data-mode="slices" title="Each channel is a constant-z square, pulled apart">Z-slices</button>
+        <button data-mode="tiles" class="on" title="Channels laid side by side in one plane">2D tiles</button>
+        <button data-mode="height" title="2D tiles, value shown as height">Height</button>
+      </div>
+      <div class="grp">
+        <label title="Distance between z-slices">Spread <input type="range" id="gap" min="2" max="18" step="0.5" value="6"></label>
+        <button id="mag" class="on" title="Cube size proportional to |value| so you can see through">Size ∝ |v|</button>
+      </div>
+      <div class="grp" id="gCam"><span class="gl">Camera</span>
+        <button data-cam="persp" class="on">Persp</button><button data-cam="ortho">Ortho</button><span class="sep"></span>
+        <button data-view="iso">Iso</button><button data-view="front">Front</button><button data-view="top">Top</button><span class="sep"></span><button id="fit">Fit</button>
+      </div>
+      <div class="grp" id="gFocus"><span class="gl">Focus</span>
+        <button data-focus="all" class="on">Everything</button><button data-focus="guidance">Guidance</button><button data-focus="attention">Attention</button><button data-focus="pictures">Pictures</button><button data-focus="inside">Inside UNet</button>
+      </div>
+      <div class="grp"><button id="lbl" class="on">Labels</button></div>
+    </div>
+    <div id="tip"></div>
+    <div id="banner"></div>
+    <div id="legend">
+      <span>signed</span><div class="g" style="background:linear-gradient(90deg,#40b3ff,#1c1f29,#ff8c2e)"></div>
+      <span>attention</span><div class="g" style="background:linear-gradient(90deg,#0d0820,#7a1f7a,#ff6a3a,#ffe9a0)"></div>
+    </div>
+    <div id="help">drag <kbd>orbit</kbd> · right-drag <kbd>pan</kbd> · wheel <kbd>zoom</kbd> · <kbd>W A S D Q E</kbd> fly · double-click to focus · <kbd>←</kbd><kbd>→</kbd> steps · <kbd>space</kbd> generate</div>
+  </main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const params=new URLSearchParams(location.search);
+
+/* =====================================================================
+   1. State: one run = a 'start' frame, N 'step' frames, a 'done' frame
+   ===================================================================== */
+const state={mode:'tiles',gap:6,mag:true,labels:true,ortho:false,focus:'all',token:1,follow:true,playing:false};
+let INFO=null;                // server/model description (shapes)
+let RUN=null;                 // {tokens, negTokens, timesteps, abar, text, textNeg, steps:[], final, generating}
+let viewK=-1;
+
+/* =====================================================================
+   2. Three.js scene
+   ===================================================================== */
+const stage=$('stage');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(2,devicePixelRatio));renderer.setClearColor(0x0a0c12);
+stage.prepend(renderer.domElement);
+const labelR=new CSS2DRenderer();Object.assign(labelR.domElement.style,{position:'absolute',top:'0',left:'0',pointerEvents:'none',zIndex:'3'});stage.appendChild(labelR.domElement);
+const scene=new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xffffff,0x303850,1.25));
+const dl=new THREE.DirectionalLight(0xffffff,1.5);dl.position.set(.6,1,1.4);scene.add(dl);
+const dl2=new THREE.DirectionalLight(0x8fb0ff,.45);dl2.position.set(-1,-.4,-1);scene.add(dl2);
+const FOV=45,ORTHO_H=200;
+const persp=new THREE.PerspectiveCamera(FOV,1,.5,20000);
+const ortho=new THREE.OrthographicCamera(-100,100,100,-100,-10000,20000);
+persp.position.set(300,200,900);let cam=persp;
+const mkCtl=c=>{const k=new OrbitControls(c,renderer.domElement);k.enableDamping=true;k.dampingFactor=.09;k.screenSpacePanning=true;k.zoomSpeed=1.1;return k;};
+const ctlP=mkCtl(persp),ctlO=mkCtl(ortho);ctlO.enabled=false;let ctl=ctlP;
+
+/* ---------- colour maps (same as the walk-through) ---------- */
+const ZC=[.11,.12,.16],NEG=[.25,.7,1],POSC=[1,.55,.18];
+const MAG=[[.05,.03,.12],[.48,.12,.48],[1,.42,.23],[1,.92,.62]];
+function seqColor(x,o){x=Math.max(0,Math.min(1,x))*3;const s=Math.min(2,x|0),f=x-s,A=MAG[s],B=MAG[s+1];o[0]=A[0]+(B[0]-A[0])*f;o[1]=A[1]+(B[1]-A[1])*f;o[2]=A[2]+(B[2]-A[2])*f;return o;}
+function robustScale(a){if(!a||!a.length)return 1;const step=Math.max(1,Math.floor(a.length/4000)),s=[];for(let i=0;i<a.length;i+=step)s.push(Math.abs(a[i]));s.sort((x,y)=>x-y);return Math.max(1e-6,s[Math.floor(s.length*.985)]);}
+
+/* ---------- a tensor drawn as instanced cubes ---------- */
+const BOX=new THREE.BoxGeometry(1,1,1),HAMP=10;
+const OBJ={},OL=[];
+class TV{
+  constructor(id,o){
+    Object.assign(this,{id,kind:'div',scale:2.5,auto:false,forceTiles:false,anchor:null},o);
+    this.mat=new THREE.MeshLambertMaterial({color:0xffffff});
+    this.group=new THREE.Group();scene.add(this.group);
+    const el=document.createElement('div');el.className='tlabel';this.labelEl=el;this.setTitle(this.title,this.sub);
+    this.label=new CSS2DObject(el);this.label.center.set(.5,1);this.group.add(this.label);
+    this.size=new THREE.Vector3(1,1,1);this.gfrom=new THREE.Vector3();this.gto=new THREE.Vector3();
+    this.extra=[];this.focused=true;this.C=0;this.setShape(o.shape||[1,1,1]);
+    OBJ[id]=this;OL.push(this);
+  }
+  setTitle(t,s){this.title=t;this.sub=s;this.labelEl.innerHTML=`${esc(t)}<span>${esc(s)}</span>`;}
+  setShape([C,H,W]){
+    if(C===this.C&&H===this.H&&W===this.W)return false;
+    if(this.mesh){this.group.remove(this.mesh);this.mesh.dispose();}
+    for(const e of this.extra)this.group.remove(e.o);this.extra=[];
+    Object.assign(this,{C,H,W,n:C*H*W});
+    this.mesh=new THREE.InstancedMesh(BOX,this.mat,this.n);
+    this.mesh.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(this.n*3),3);
+    this.mesh.frustumCulled=false;this.mesh.userData.obj=this;this.group.add(this.mesh);
+    this.cur=new Float32Array(this.n*3);this.from=new Float32Array(this.n*3);this.to=new Float32Array(this.n*3);
+    this.data=new Float32Array(this.n);this.chanMax=new Float32Array(C).fill(1);this.empty=true;
+    return true;
+  }
+  setData(arr){
+    if(!arr)return;this.data=arr;this.empty=false;
+    if(this.auto)this.scale=robustScale(arr);
+    if(this.kind==='seq'){const HW=this.H*this.W;for(let c=0;c<this.C;c++){let m=1e-9;for(let i=c*HW;i<(c+1)*HW;i++)m=Math.max(m,arr[i]);this.chanMax[c]=m;}}
+    this.refresh();
+  }
+  addLabel(text,idx,off,cls,center){const el=document.createElement('div');el.className='wlabel '+(cls||'');el.textContent=text;const o=new CSS2DObject(el);if(center)o.center.set(center[0],center[1]);this.group.add(o);this.extra.push({o,el,idx,off});return el;}
+  mode(){const m=state.mode;return this.forceTiles&&(m==='volume'||m==='slices')?'tiles':m;}
+  layout(){
+    const{C,H,W,n}=this,m=this.mode(),tiled=m==='tiles'||m==='height';
+    const cc=typeof this.cols==='function'?this.cols(C):this.cols,cols=tiled?(cc||(C<=5?C:Math.ceil(Math.sqrt(C*W/H*.6)))):1,tg=Math.max(2,Math.round(Math.min(H,W)*.12));
+    const zsp=m==='volume'?1:m==='slices'?state.gap:0;
+    let mnx=1e9,mny=1e9,mnz=1e9,mxx=-1e9,mxy=-1e9,mxz=-1e9;const to=this.to,HW=H*W;
+    for(let i=0;i<n;i++){const c=(i/HW)|0,r=i-c*HW,h=(r/W)|0,w=r-h*W;let x,y,z;
+      if(tiled){const col=c%cols,row=(c/cols)|0;x=col*(W+tg)+w;y=-(row*(H+tg+(this.tileGapY||0))+h);z=0;}else{x=w;y=-h;z=-c*zsp;}
+      to[3*i]=x;to[3*i+1]=y;to[3*i+2]=z;
+      if(x<mnx)mnx=x;if(x>mxx)mxx=x;if(y<mny)mny=y;if(y>mxy)mxy=y;if(z<mnz)mnz=z;if(z>mxz)mxz=z;}
+    const cx=(mnx+mxx)/2,cy=(mny+mxy)/2,cz=(mnz+mxz)/2;
+    for(let i=0;i<n;i++){to[3*i]-=cx;to[3*i+1]-=cy;to[3*i+2]-=cz;}
+    this.size.set(mxx-mnx+1,mxy-mny+1,Math.max(mxz-mnz+1,m==='height'?2*HAMP:1));
+    this.grid=null;if(tiled){this.grid=new Map();for(let i=0;i<n;i++)this.grid.set(Math.round(to[3*i])+','+Math.round(to[3*i+1]),i);}
+    if(this.cur.every(v=>v===0))this.cur.set(to);
+    this.from.set(this.cur);
+  }
+  place(u){
+    for(let i=0;i<this.cur.length;i++)this.cur[i]=this.from[i]+(this.to[i]-this.from[i])*u;
+    this.group.position.lerpVectors(this.gfrom,this.gto,u);
+    this.label.position.set(0,this.size.y/2+(this.labelLift||3),this.size.z/2);
+    for(const e of this.extra){const i=e.idx;e.o.position.set(this.cur[3*i]+e.off[0],this.cur[3*i+1]+e.off[1],this.cur[3*i+2]+.6);}
+  }
+  norm(v,c){if(this.kind==='seq')return Math.sqrt(Math.max(0,v)/this.chanMax[c]);return Math.max(-1,Math.min(1,v/this.scale));}
+  refresh(){
+    const{H,W,n,kind}=this,HW=H*W,M=this.mesh.instanceMatrix.array,CO=this.mesh.instanceColor.array,data=this.data,cur=this.cur;
+    const height=this.mode()==='height',mag=state.mag&&!height,col=[0,0,0];
+    for(let i=0;i<n;i++){const c=(i/HW)|0,tn=this.empty?0:this.norm(data[i],c);
+      let sx=.9,sz=.9,px=cur[3*i],py=cur[3*i+1],pz=cur[3*i+2];
+      if(this.empty){sx=sz=.25;}else if(height){const hh=tn*HAMP;sz=Math.max(.08,Math.abs(hh));pz+=hh/2;}else if(mag){sx=sz=.2+.76*Math.min(1,Math.abs(tn));}
+      const o=i*16;M[o]=sx;M[o+1]=0;M[o+2]=0;M[o+3]=0;M[o+4]=0;M[o+5]=sx;M[o+6]=0;M[o+7]=0;M[o+8]=0;M[o+9]=0;M[o+10]=sz;M[o+11]=0;M[o+12]=px;M[o+13]=py;M[o+14]=pz;M[o+15]=1;
+      if(kind==='seq')seqColor(tn,col);
+      else{const a=Math.pow(Math.abs(tn),.75),tg=tn<0?NEG:POSC;col[0]=ZC[0]+(tg[0]-ZC[0])*a;col[1]=ZC[1]+(tg[1]-ZC[1])*a;col[2]=ZC[2]+(tg[2]-ZC[2])*a;}
+      CO[3*i]=col[0];CO[3*i+1]=col[1];CO[3*i+2]=col[2];}
+    this.mesh.instanceMatrix.needsUpdate=true;this.mesh.instanceColor.needsUpdate=true;this.mesh.boundingSphere=null;this.mesh.boundingBox=null;
+  }
+  setFocus(f){this.focused=f;const dim=!f;this.mat.transparent=dim;this.mat.opacity=dim?.08:1;this.mat.depthWrite=!dim;this.mat.needsUpdate=true;
+    this.labelEl.classList.toggle('dim',dim);for(const e of this.extra)e.el.classList.toggle('dim',dim);}
+  world(i,out){return out.set(this.cur[3*i],this.cur[3*i+1],this.cur[3*i+2]).add(this.group.position);}
+  idx(c,h,w){return (c*this.H+h)*this.W+w;}
+  value(i){return this.data[i];}
+}
+
+/* ---------- an image drawn as a textured plane ---------- */
+const PLANE=136;
+class Plane{
+  constructor(id,o){
+    Object.assign(this,{id,anchor:null},o);
+    this.canvas=document.createElement('canvas');this.canvas.width=this.canvas.height=512;this.ctx=this.canvas.getContext('2d',{willReadFrequently:true});
+    this.tex=new THREE.CanvasTexture(this.canvas);this.tex.colorSpace=THREE.SRGBColorSpace;
+    this.mat=new THREE.MeshBasicMaterial({map:this.tex,transparent:true});
+    this.mesh=new THREE.Mesh(new THREE.PlaneGeometry(PLANE,PLANE),this.mat);this.mesh.userData.obj=this;
+    this.group=new THREE.Group();this.group.add(this.mesh);scene.add(this.group);
+    const el=document.createElement('div');el.className='tlabel';this.labelEl=el;this.setTitle(this.title,this.sub);
+    this.label=new CSS2DObject(el);this.label.center.set(.5,1);this.label.position.set(0,PLANE/2+3,0);this.group.add(this.label);
+    this.size=new THREE.Vector3(PLANE,PLANE,1);this.gfrom=new THREE.Vector3();this.gto=new THREE.Vector3();this.extra=[];this.focused=true;
+    this.clear();OBJ[id]=this;OL.push(this);
+  }
+  setTitle(t,s){this.title=t;this.sub=s;this.labelEl.innerHTML=`${esc(t)}<span>${esc(s)}</span>`;}
+  clear(){const g=this.ctx;g.fillStyle='#141824';g.fillRect(0,0,512,512);g.fillStyle='#3a4258';g.font='500 22px Inter';g.textAlign='center';g.fillText(this.empty||'waiting for data',256,262);this.tex.needsUpdate=true;this.has=false;}
+  draw(bmp){if(!bmp)return this.clear();this.ctx.drawImage(bmp,0,0,512,512);this.tex.needsUpdate=true;this.has=true;}
+  layout(){}refresh(){}
+  place(u){this.group.position.lerpVectors(this.gfrom,this.gto,u);}
+  setFocus(f){this.focused=f;this.mat.opacity=f?1:.12;this.labelEl.classList.toggle('dim',!f);}
+}
+
+/* =====================================================================
+   3. The scene graph: which tensors, where, and how they connect
+   ===================================================================== */
+const LATENTS=['z','eps_u','eps_c','diff','eps_g','x0','z_next'];
+function buildScene(){
+  const L=INFO.latent,[ch]=L,tg=INFO.text_grid,ar=INFO.attn_res;
+  const lat=(id,title,sub,o={})=>new TV(id,{shape:L,lane:'main',cols:2,title,sub,...o});
+  lat('z','z_t · noisy latent',`${L.join(' × ')}  ·  the sampler state`);
+  lat('eps_u','ε̂∅ · noise predicted',`UNet pass with the negative prompt`);
+  lat('eps_c','ε̂ · noise predicted',`UNet pass with your prompt`);
+  lat('diff','ε̂ − ε̂∅ · the prompt’s push','auto-scaled: it is small',{auto:true});
+  lat('eps_g','ε̂_cfg · guided noise','ε̂∅ + w · (ε̂ − ε̂∅)');
+  lat('x0','x̂₀ · predicted clean latent','(z_t − √(1−ᾱ)·ε̂_cfg) / √ᾱ');
+  lat('z_next','z_next · after one step','scheduler.step(z_t, ε̂_cfg)');
+  new TV('tfeat',{shape:[1,...INFO.tfeat_grid],lane:'cond',padX:22,title:'sin/cos(t)',sub:`${INFO.tfeat_grid[0]*INFO.tfeat_grid[1]} features`,scale:1});
+  new TV('temb',{shape:[1,...INFO.temb_grid],lane:'cond',padX:30,title:'t-embedding',sub:`${INFO.temb_grid[0]*INFO.temb_grid[1]} values, added in every ResNet block`,auto:true});
+  new TV('text_neg',{shape:[2,...tg],lane:'cond',anchor:'eps_u',title:'negative-prompt embedding',sub:`CLIP · tokens × ${INFO.text_dim}`,auto:true,forceTiles:true,tileGapY:8,labelLift:12,cols:C=>Math.min(C,5)});
+  new TV('text',{shape:[2,...tg],lane:'cond',anchor:'eps_c',title:'prompt embedding',sub:`CLIP · tokens × ${INFO.text_dim} (each folded to ${tg.join('×')})`,auto:true,forceTiles:true,tileGapY:8,labelLift:12,cols:C=>Math.min(C,5)});
+  new TV('mid',{shape:INFO.mid,lane:'cond',anchor:'eps_g',cols:8,title:'UNet bottleneck',sub:`first ${INFO.mid[0]} of ${INFO.mid_total} channels · ${INFO.mid[1]}×${INFO.mid[2]}`,auto:true});
+  new TV('attn',{shape:[2,ar,ar],lane:'below',cols:C=>Math.min(C,5),anchor:'eps_c',kind:'seq',forceTiles:true,tileGapY:8,labelLift:12,title:'cross-attention maps',sub:`softmax(QKᵀ/√d) · image → each word · ${INFO.cross_layers} layers averaged`});
+  new Plane('zimg',{lane:'below',anchor:'z',title:'decode(z_t)',sub:'what the noisy latent looks like (TAESD)'});
+  OL.push(OL.splice(OL.indexOf(OBJ.attn),1)[0]);
+  new Plane('overlay',{lane:'below',title:'x̂₀ + attention',sub:''});
+  new Plane('x0img',{lane:'below',anchor:'x0',title:'decode(x̂₀)',sub:'the model’s current guess (TAESD)'});
+  new Plane('final',{lane:'below',anchor:'z_next',title:'final image',sub:'full VAE decoder, after the last step',empty:'appears after the last step'});
+  buildEdges();
+}
+
+const EDGE_DEFS=[['z','eps_u','UNet(z_t, t, ∅)'],['z','eps_c','UNet(z_t, t, prompt)'],['text_neg','eps_u','cross-attn K, V'],['text','eps_c','cross-attn K, V'],
+ ['tfeat','temb','MLP'],['temb','eps_u',''],['temb','eps_c','t enters every block'],['z','mid','down-blocks'],['mid','eps_c','up-blocks'],
+ ['eps_u','diff',''],['eps_c','diff','ε̂ − ε̂∅'],['diff','eps_g','× w'],['eps_u','eps_g',''],['eps_g','x0','solve for x₀'],['x0','z_next','scheduler step'],
+ ['eps_c','attn','softmax(QKᵀ/√d)'],['z','zimg','TAESD'],['x0','x0img','TAESD'],['x0img','overlay',''],['attn','overlay','selected word'],['z_next','final','VAE decode at the end'],['z_next','z','loop: becomes the next z_t']];
+const edgeMatDim=new THREE.LineBasicMaterial({color:0x46506a,transparent:true,opacity:.7}),edgeMatHot=new THREE.LineBasicMaterial({color:0xffb35a});
+const coneGeo=new THREE.ConeGeometry(1.5,4.5,10),coneDim=new THREE.MeshBasicMaterial({color:0x46506a}),coneHot=new THREE.MeshBasicMaterial({color:0xffb35a});
+let EDGES=[];
+function buildEdges(){EDGES=EDGE_DEFS.map(([a,b,l])=>{const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(49*3),3));
+  const line=new THREE.Line(geo,edgeMatDim);line.frustumCulled=false;const cone=new THREE.Mesh(coneGeo,coneDim);scene.add(line,cone);
+  let lab=null,el=null;if(l){el=document.createElement('div');el.className='elabel';el.textContent=l;lab=new CSS2DObject(el);scene.add(lab);}
+  return{a:OBJ[a],b:OBJ[b],line,cone,lab,el};});}
+const _v=[...Array(6)].map(()=>new THREE.Vector3());
+function bez(p0,p1,p2,p3,t,o){const u=1-t;return o.set(0,0,0).addScaledVector(p0,u*u*u).addScaledVector(p1,3*u*u*t).addScaledVector(p2,3*u*t*t).addScaledVector(p3,t*t*t);}
+function updateEdges(){
+  for(const e of EDGES){const A=e.a,B=e.b,pa=A.group.position,pb=B.group.position;const[p0,p1,p2,p3,q,q2]=_v;
+    const aR=pa.x+A.size.x/2,bL=pb.x-B.size.x/2,aB=pa.y-A.size.y/2,bB=pb.y-B.size.y/2;
+    if(bL>aR+2&&Math.abs(pa.y-pb.y)<5){p0.set(aR+1.5,pa.y,0);p3.set(bL-3,pb.y,0);const dx=p3.x-p0.x,lift=dx>70?Math.min(70,dx*.16):0;p1.set(p0.x+dx*.4,p0.y+lift,0);p2.set(p3.x-dx*.4,p3.y+lift,0);}
+    else if(pb.y<pa.y-5){p0.set(pa.x,aB-2,0);p3.set(pb.x,pb.y+B.size.y/2+14,0);const k=Math.max(30,(p0.y-p3.y)*.5);p1.set(p0.x,p0.y-k,0);p2.set(p3.x,p3.y+k,0);}
+    else if(pb.y>pa.y+5){p0.set(pa.x,pa.y+A.size.y/2+14,0);p3.set(pb.x,bB-3,0);const k=Math.max(30,(p3.y-p0.y)*.5);p1.set(p0.x,p0.y+k,0);p2.set(p3.x,p3.y-k,0);}
+    else{p0.set(pa.x,aB-2,0);p3.set(pb.x,bB-3,0);p1.set(p0.x,p0.y-45,0);p2.set(p3.x,p3.y-45,0);}
+    const arr=e.line.geometry.attributes.position.array;for(let i=0;i<49;i++){bez(p0,p1,p2,p3,i/48,q);arr[3*i]=q.x;arr[3*i+1]=q.y;arr[3*i+2]=q.z;}
+    e.line.geometry.attributes.position.needsUpdate=true;
+    bez(p0,p1,p2,p3,.95,q2);e.cone.position.copy(p3);e.cone.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),q.copy(p3).sub(q2).normalize());
+    if(e.lab){bez(p0,p1,p2,p3,.5,q);e.lab.position.copy(q);}}
+}
+function styleEdges(){for(const e of EDGES){const hot=e.a.focused&&e.b.focused&&state.focus!=='all';e.line.material=hot?edgeMatHot:edgeMatDim;e.cone.material=hot?coneHot:coneDim;
+  if(e.el)e.el.classList.toggle('dim',state.focus!=='all'&&!hot);}}
+
+/* ---------- lanes: conditioning on top, the step in the middle, attention and pictures below ---------- */
+const GAP=34;let layoutU=1;
+function relayout(animate=true){
+  for(const o of OL){o.layout();o.gfrom.copy(o.group.position);}
+  const lane=n=>OL.filter(o=>o.lane===n),H=n=>Math.max(...lane(n).map(o=>o.size.y));
+  const left=()=>OBJ.z.gto.x-OBJ.z.size.x/2;
+  let x=0;for(const o of lane('main')){o.gto.set(x+o.size.x/2,0,0);x+=o.size.x+GAP;}
+  const Y={main:0};Y.cond=H('main')/2+70+H('cond')/2;Y.below=-(H('main')/2+90+H('below')/2);
+  for(const n of ['cond','below']){let cur=left();for(const o of lane(n)){const px=o.padX||0;let cx=cur+px+o.size.x/2;if(o.anchor)cx=Math.max(cx,OBJ[o.anchor].gto.x);o.gto.set(cx,Y[n],0);cur=cx+o.size.x/2+px+GAP;}}
+  layoutU=animate?0:1;if(!animate){for(const o of OL){o.place(1);o.refresh();}updateEdges();}
+}
+
+/* =====================================================================
+   4. Hover, related highlights, picking
+   ===================================================================== */
+function mkHL(color,opacity){const m=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color,transparent:true,opacity,depthTest:false}));m.renderOrder=10;m.frustumCulled=false;scene.add(m);return m;}
+const hoverHL=mkHL(0xffffff,.95),relHL=mkHL(0xffb35a,.9),selHL=mkHL(0x5ac8ff,.95);
+const EDGE_IDX=[[0,1],[1,3],[3,2],[2,0],[4,5],[5,7],[7,6],[6,4],[0,4],[1,5],[2,6],[3,7]];
+function setBoxes(hl,boxes){const arr=new Float32Array(boxes.length*72);let o=0;
+  for(const[mn,mx]of boxes){const c=[];for(let k=0;k<8;k++)c.push([k&1?mx.x:mn.x,k&2?mx.y:mn.y,k&4?mx.z:mn.z]);for(const[a,b]of EDGE_IDX){arr.set(c[a],o);arr.set(c[b],o+3);o+=6;}}
+  hl.geometry.dispose();hl.geometry=new THREE.BufferGeometry();hl.geometry.setAttribute('position',new THREE.BufferAttribute(arr,3));}
+function boxesFor(t,cells,pad=.6){const by=new Map(),p=new THREE.Vector3();
+  for(const[c,h,w]of cells){t.world(t.idx(c,h,w),p);let b=by.get(c);if(!b){b=[p.clone(),p.clone()];by.set(c,b);}else{b[0].min(p);b[1].max(p);}}
+  const out=[];const z=t.mode()==='height'?HAMP:.5;for(const b of by.values())out.push([b[0].clone().addScalar(-pad).setZ(b[0].z-z-.1),b[1].clone().addScalar(pad).setZ(b[1].z+z+.1)]);return out;}
+function planeBox(pl,x0,y0,s){const g=pl.group.position,k=PLANE/512;return[[new THREE.Vector3(g.x-PLANE/2+x0*k,g.y+PLANE/2-(y0+s)*k,g.z-.3),new THREE.Vector3(g.x-PLANE/2+(x0+s)*k,g.y+PLANE/2-y0*k,g.z+.6)]];}
+/* every tensor here is a view of the same 64×64 latent grid, so "related" = the same image region everywhere */
+function regionBoxes(lh,lw,ls,skip){
+  const out=[],L=INFO.latent,F=L[1]/INFO.attn_res,px=512/L[1];
+  for(const id of LATENTS){if(id===skip)continue;const t=OBJ[id],cells=[];for(let c=0;c<t.C;c++)for(let y=lh;y<lh+ls;y++)for(let x=lw;x<lw+ls;x++)cells.push([c,y,x]);out.push(...boxesFor(t,cells,.55));}
+  if(skip!=='attn'){const t=OBJ.attn,a0=Math.floor(lh/F),b0=Math.floor(lw/F),as=Math.max(1,Math.ceil(ls/F)),cells=[];for(let c=0;c<t.C;c++)for(let y=a0;y<a0+as;y++)for(let x=b0;x<b0+as;x++)cells.push([c,y,x]);out.push(...boxesFor(t,cells,.55));}
+  for(const id of ['zimg','x0img','overlay','final'])if(id!==skip)out.push(...planeBox(OBJ[id],lw*px,lh*px,ls*px));
+  return out;}
+function describe(o,c,h,w,v){
+  const L=INFO.latent,px=512/L[1];
+  if(o instanceof Plane){const d=o.ctx.getImageData(Math.min(511,w),Math.min(511,h),1,1).data;return `<b>${esc(o.title)}</b>\npixel (x ${w}, y ${h})  rgb(${d[0]}, ${d[1]}, ${d[2]})\n← latent cell (${Math.floor(h/px)}, ${Math.floor(w/px)}) · every latent cell is an 8 × 8 pixel patch`;}
+  let s=`<b>${esc(o.title)}</b>\nindex [c=${c}, h=${h}, w=${w}]   value = ${v.toFixed(4)}\n`;
+  if(LATENTS.includes(o.id))s+=`latent channel ${c} of ${L[0]} · cell (${h}, ${w})\n← pixels x ${w*px}–${w*px+px-1}, y ${h*px}–${h*px+px-1}`+(o.id==='diff'?`\ncolour scale ±${o.scale.toFixed(3)} (auto)`:'');
+  else if(o.id==='attn'){const tok=RUN?.tokens[c]??c;s+=`token "${esc(tok)}" at image cell (${h}, ${w}) of ${INFO.attn_res}²\n= ${(v*100).toFixed(2)}% of that spot's attention\n<i>click to overlay this word</i>`;}
+  else if(o.id==='text'||o.id==='text_neg'){const toks=o.id==='text'?RUN?.tokens:RUN?.negTokens;s+=`token "${esc(toks?.[c]??c)}", embedding dim ${h*o.W+w} of ${INFO.text_dim}`;}
+  else if(o.id==='mid')s+=`bottleneck channel ${c}, cell (${h}, ${w}) ← a ${512/o.H}×${512/o.W} px region`;
+  else if(o.id==='tfeat')s+=`sinusoidal feature ${h*o.W+w}`;
+  else if(o.id==='temb')s+=`embedding dim ${h*o.W+w} of ${o.H*o.W}`;
+  return s;
+}
+const ray=new THREE.Raycaster(),mouse=new THREE.Vector2();let mouseDirty=false,mouseIn=false,hover=null;
+const tip=$('tip');
+renderer.domElement.addEventListener('pointermove',e=>{const r=renderer.domElement.getBoundingClientRect();mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);mouseDirty=true;mouseIn=true;
+  const tx=e.clientX-r.left+14;tip.style.left=Math.min(tx,r.width-390)+'px';tip.style.top=(e.clientY-r.top+14)+'px';});
+renderer.domElement.addEventListener('pointerleave',()=>{mouseIn=false;clearHover();});
+function clearHover(){hover=null;tip.style.display='none';setBoxes(hoverHL,[]);setBoxes(relHL,[]);}
+function pick(){
+  if(!INFO)return;ray.setFromCamera(mouse,cam);
+  let hit=ray.intersectObjects(OL.filter(o=>o.focused).map(o=>o.mesh),false)[0];
+  if(!hit||(hit.instanceId===undefined&&!(hit.object.userData.obj instanceof Plane)))hit=gridHit(hit);
+  if(!hit)return clearHover();
+  const o=hit.object.userData.obj;
+  if(o instanceof Plane){if(!hit.uv)return clearHover();const w=Math.floor(hit.uv.x*512),h=Math.floor((1-hit.uv.y)*512);hover={o,c:0,h,w};
+    tip.innerHTML=describe(o,0,h,w,0);tip.style.display='block';const px=512/INFO.latent[1];
+    setBoxes(hoverHL,planeBox(o,Math.floor(w/px)*px,Math.floor(h/px)*px,px));setBoxes(relHL,regionBoxes(Math.floor(h/px),Math.floor(w/px),1,o.id));return;}
+  if(hit.instanceId===undefined)return clearHover();
+  const i=hit.instanceId,HW=o.H*o.W,c=(i/HW)|0,r=i-c*HW,h=(r/o.W)|0,w=r-h*o.W;
+  hover={o,c,h,w};tip.innerHTML=describe(o,c,h,w,o.value(i));tip.style.display='block';
+  setBoxes(hoverHL,boxesFor(o,[[c,h,w]],.62));
+  if(LATENTS.includes(o.id))setBoxes(relHL,regionBoxes(h,w,1,o.id));
+  else if(o.id==='attn'){const F=INFO.latent[1]/INFO.attn_res;setBoxes(relHL,regionBoxes(h*F,w*F,F,'attn'));}
+  else setBoxes(relHL,[]);
+}
+/* small values draw as small cubes, so a ray can slip between them; in flat layouts fall back to the tensor's plane */
+const _pl=new THREE.Plane(new THREE.Vector3(0,0,1),0),_hp=new THREE.Vector3();
+function gridHit(fallback){
+  let best=fallback||null;
+  for(const o of OL){if(!o.grid||!o.focused||layoutU<1)continue;_pl.constant=-o.group.position.z;if(!ray.ray.intersectPlane(_pl,_hp))continue;
+    const d=_hp.distanceTo(ray.ray.origin);if(best&&best.distance<=d)continue;
+    const i=o.grid.get(Math.round(_hp.x-o.group.position.x)+','+Math.round(_hp.y-o.group.position.y));
+    if(i!==undefined)best={object:o.mesh,instanceId:i,distance:d};}
+  return best;
+}
+let downAt=null;
+renderer.domElement.addEventListener('pointerdown',e=>{downAt=[e.clientX,e.clientY];});
+renderer.domElement.addEventListener('pointerup',e=>{if(!downAt||Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1])>4||e.button!==0||!hover)return;
+  if(hover.o.id==='attn'||hover.o.id==='text')selectToken(hover.c);});
+renderer.domElement.addEventListener('dblclick',()=>{if(hover)focusObjs([hover.o.id]);});
+
+/* ---------- camera ---------- */
+const V=THREE.Vector3;
+const VIEWS={iso:new V(.3,.22,1),front:new V(0,0,1),top:new V(0,1,.0001)};
+let camAnim=null;
+function boundsOf(ids){const b=new THREE.Box3();for(const id of ids){const t=OBJ[id];if(!t)continue;const mn=t.gto.clone().sub(t.size.clone().multiplyScalar(.5)),mx=t.gto.clone().add(t.size.clone().multiplyScalar(.5));mx.y+=12;b.expandByPoint(mn);b.expandByPoint(mx);}return b;}
+function flyToBox(box,dir){
+  if(!dir)dir=cam.position.clone().sub(ctl.target).normalize();dir=dir.clone().normalize();
+  const ctr=box.getCenter(new V());const upW=Math.abs(dir.y)>.99?new V(0,0,-1):new V(0,1,0);const right=upW.clone().cross(dir).normalize(),up=dir.clone().cross(right).normalize();
+  let hw=0,hh=0,dz=0;for(let k=0;k<8;k++){const p=new V(k&1?box.max.x:box.min.x,k&2?box.max.y:box.min.y,k&4?box.max.z:box.min.z).sub(ctr);hw=Math.max(hw,Math.abs(p.dot(right)));hh=Math.max(hh,Math.abs(p.dot(up)));dz=Math.max(dz,Math.abs(p.dot(dir)));}
+  hw=Math.max(hw,8)*1.06;hh=Math.max(hh,8)*1.1;
+  const asp=stage.clientWidth/Math.max(1,stage.clientHeight),tv=Math.tan(THREE.MathUtils.degToRad(FOV)/2),th=tv*asp;
+  const dist=Math.max(hw/th,hh/tv)+dz;camAnim={u:0,fp:cam.position.clone(),tp:ctr.clone().addScaledVector(dir,dist),ft:ctl.target.clone(),tt:ctr,fz:ortho.zoom,tz:ORTHO_H/Math.max(2*hh,2*hw/asp)};
+}
+function focusObjs(ids,dir){flyToBox(boundsOf(ids),dir);}
+function setOrtho(on){
+  if(on===state.ortho)return;const dir=cam.position.clone().sub(ctl.target),dist=dir.length(),tan=Math.tan(THREE.MathUtils.degToRad(FOV)/2);
+  if(on){ortho.position.copy(persp.position);ortho.zoom=ORTHO_H/(2*dist*tan);ctlO.target.copy(ctlP.target);cam=ortho;ctl=ctlO;}
+  else{const visH=ORTHO_H/ortho.zoom,d=visH/(2*tan);persp.position.copy(ctlO.target).addScaledVector(dir.normalize(),d);ctlP.target.copy(ctlO.target);cam=persp;ctl=ctlP;}
+  ctlP.enabled=!on;ctlO.enabled=on;ortho.updateProjectionMatrix();state.ortho=on;
+  document.querySelectorAll('[data-cam]').forEach(b=>b.classList.toggle('on',(b.dataset.cam==='ortho')===on));
+}
+const FOCUS={all:null,guidance:['z','eps_u','eps_c','diff','eps_g','x0','z_next','text','text_neg'],attention:['text','eps_c','attn','overlay','x0img'],pictures:['z','x0','z_next','zimg','x0img','overlay','final'],inside:['z','tfeat','temb','mid','eps_c','text']};
+function setFocus(f){state.focus=f;document.querySelectorAll('[data-focus]').forEach(b=>b.classList.toggle('on',b.dataset.focus===f));
+  labelR.domElement.classList.toggle('compact',f==='all');const ids=FOCUS[f];for(const o of OL)o.setFocus(!ids||ids.includes(o.id));styleEdges();fit();}
+function fit(dir){const ids=FOCUS[state.focus]||OL.map(o=>o.id);focusObjs(ids,dir);}
+const keys={};
+addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;keys[e.code]=true;
+  if(e.code==='ArrowRight')showStep(viewK+1,true);if(e.code==='ArrowLeft')showStep(viewK-1,true);if(e.code==='KeyF')fit();
+  if(e.code==='Space'){e.preventDefault();generate();}});
+addEventListener('keyup',e=>{keys[e.code]=false;});
+function flyKeys(dt){
+  const f=(keys.KeyW?1:0)-(keys.KeyS?1:0),r=(keys.KeyD?1:0)-(keys.KeyA?1:0),u=(keys.KeyE?1:0)-(keys.KeyQ?1:0);if(!f&&!r&&!u)return;
+  camAnim=null;const fwd=ctl.target.clone().sub(cam.position);const dist=state.ortho?ORTHO_H/ortho.zoom:fwd.length();fwd.normalize();
+  const right=fwd.clone().cross(cam.up).normalize(),up=right.clone().cross(fwd).normalize(),sp=dist*.7*dt;
+  const mv=right.multiplyScalar(r*sp).addScaledVector(up,u*sp);
+  if(state.ortho){ortho.zoom*=1+f*dt*1.2;ortho.updateProjectionMatrix();}else mv.addScaledVector(fwd,f*sp);
+  cam.position.add(mv);ctl.target.add(mv);
+}
+
+/* =====================================================================
+   5. Server connection & wire format
+   ===================================================================== */
+function parseFrame(buf){
+  const n=new DataView(buf).getUint32(0,true),head=JSON.parse(new TextDecoder().decode(new Uint8Array(buf,4,n))),base=4+n;
+  const T={},B={};
+  for(const t of head.tensors)T[t.name]=new Float32Array(buf,base+t.offset,t.length/4);
+  for(const b of head.blobs)B[b.name]=createImageBitmap(new Blob([new Uint8Array(buf,base+b.offset,b.length)],{type:b.mime}));
+  return{head,T,B};
+}
+let ws=null,retry=0;
+const WS_URL=params.get('server')||(location.protocol.startsWith('http')?`ws://${location.host}/ws`:'ws://127.0.0.1:8765/ws');
+function connect(){
+  setConn('wait','connecting');ws=new WebSocket(WS_URL);ws.binaryType='arraybuffer';
+  ws.onopen=()=>{retry=0;$('banner').style.display='none';};
+  ws.onmessage=e=>{if(typeof e.data==='string')return;const f=parseFrame(e.data);handle[f.head.type]?.(f);};
+  ws.onclose=()=>{setConn('','offline');$('go').disabled=true;$('stop').disabled=true;if(RUN)RUN.generating=false;
+    if(retry++>1){const b=$('banner');b.style.display='block';b.innerHTML=`<b>No server at <code>${esc(WS_URL)}</code></b><p>Start it from the <code>live/</code> folder:</p><p><code>uv run server.py</code></p><p style="color:var(--dim);margin-bottom:0">Then open <code>http://127.0.0.1:8765</code>. Retrying automatically…</p>`;}
+    setTimeout(connect,Math.min(5000,500*retry));};
+}
+function setConn(cls,txt){const c=$('conn');c.className=cls;c.textContent=txt;}
+function send(o){if(ws?.readyState===1)ws.send(JSON.stringify(o));}
+
+const handle={
+  hello({head}){const i=head.info;
+    $('modelinfo').textContent=`${i.model} · ${i.device} ${i.dtype}`+(i.ready?'':` · loading: ${i.status}…`);
+    if(!i.ready){setConn('wait','loading');$('status').textContent=`loading model: ${i.status}… (the first run downloads ~2 GB)`;return;}
+    setConn('ok','ready');const first=!INFO;INFO=i;
+    $('go').disabled=false;
+    if(first){buildScene();relayout(false);setFocus('all');fit(VIEWS.iso);$('status').textContent='ready. Press Generate (or space).';if(params.get('auto'))generate();}
+  },
+  start({head,T}){
+    RUN={tokens:head.tokens,negTokens:head.neg_tokens,timesteps:head.timesteps,abar:head.abar,params:head.params,steps:[],final:null,generating:true,t0:performance.now()};
+    viewK=-1;state.token=Math.min(state.token,head.tokens.length-1);if(state.token===0&&head.tokens.length>1)state.token=1;
+    const tg=INFO.text_grid,ar=INFO.attn_res;let changed=false;
+    changed|=OBJ.text.setShape([head.tokens.length,...tg]);changed|=OBJ.text_neg.setShape([head.neg_tokens.length,...tg]);changed|=OBJ.attn.setShape([head.tokens.length,ar,ar]);
+    wordLabels();if(changed)relayout(false);else for(const id of ['text','text_neg','attn'])OBJ[id].place(1);
+    OBJ.text.setData(T.text);OBJ.text_neg.setData(T.text_neg);
+    for(const id of ['zimg','x0img','overlay','final'])OBJ[id].clear();
+    $('kslider').max=head.timesteps.length-1;$('kslider').disabled=true;
+    drawWords();drawSparks();syncButtons();
+    $('status').innerHTML=`encoding prompt (${head.tokens.length} tokens) · ${head.timesteps.length} steps`;
+  },
+  step(f){
+    if(!RUN)return;const{head,T,B}=f;
+    // derived: what the prompt adds, and how much the guess moved
+    const diff=new Float32Array(T.eps_c.length);for(let i=0;i<diff.length;i++)diff[i]=T.eps_c[i]-T.eps_u[i];T.diff=diff;
+    const prev=RUN.steps[head.k-1];
+    if(head.k===0&&!RUN.userToken){const R=INFO.attn_res,n=RUN.tokens.length;let best=1,bm=-1;for(let c=1;c<n-1;c++){if(STOP.has(RUN.tokens[c]))continue;let m=0;for(let i=c*R*R;i<(c+1)*R*R;i++)m+=T.attn[i];if(m>bm){bm=m;best=c;}}state.token=best;markToken();}
+    RUN.steps[head.k]={...head,T,B,stats:{noise:Math.sqrt(1-head.abar),prompt:rms(diff),move:prev?rmsDelta(T.x0,prev.T.x0):NaN,ms:head.unet_ms}};
+    $('prog').firstChild.style.width=`${(head.k+1)/head.n*100}%`;
+    const el=(performance.now()-RUN.t0)/1000;$('status').innerHTML=`step <b>${head.k+1}</b> / ${head.n} · ${el.toFixed(1)} s · UNet ${head.unet_ms.toFixed(0)} ms + preview ${head.preview_ms.toFixed(0)} ms`;
+    $('kslider').disabled=false;syncButtons();
+    if(state.follow&&!state.playing)showStep(head.k);else drawSparks();
+  },
+  async done({head,B}){
+    if(!RUN)return;RUN.generating=false;RUN.final=await B.final;OBJ.final.draw(RUN.final);
+    $('status').innerHTML=`done in <b>${head.total_s} s</b> · final VAE decode ${head.decode_ms.toFixed(0)} ms · seed ${RUN.params.seed}`;syncButtons();
+  },
+  cancelled({head}){if(RUN)RUN.generating=false;$('status').textContent=`stopped after ${head.k} steps`;syncButtons();},
+  error({head}){if(RUN)RUN.generating=false;$('status').innerHTML=`<span style="color:var(--bad)">error: ${esc(head.message)}</span>`;syncButtons();},
+};
+const STOP=new Set(['a','an','the','of','on','in','at','by','with','and','to','for','from','is',',','.']);
+const rms=a=>{let s=0;for(const x of a)s+=x*x;return Math.sqrt(s/a.length);};
+const rmsDelta=(a,b)=>{let s=0;for(let i=0;i<a.length;i++)s+=(a[i]-b[i])**2;return Math.sqrt(s/a.length);};
+
+function wordLabels(){
+  for(const id of ['text','text_neg','attn']){const t=OBJ[id],toks=id==='text_neg'?RUN.negTokens:RUN.tokens;for(const e of t.extra)t.group.remove(e.o);t.extra=[];
+    toks.forEach((w,c)=>{t.addLabel(w,t.idx(c,0,t.W>>1),[0,1.2],'',[.5,1]).dataset.c=c;});}
+  markToken();
+}
+function markToken(){for(const id of ['text','attn'])for(const e of OBJ[id].extra)e.el.classList.toggle('q',+e.el.dataset.c===state.token);}
+
+/* =====================================================================
+   6. Showing a step
+   ===================================================================== */
+async function showStep(k,user){
+  if(!RUN||!RUN.steps.length)return;k=Math.max(0,Math.min(RUN.steps.length-1,k));
+  if(user){state.follow=k===RUN.steps.length-1&&RUN.generating;$('follow').checked=state.follow;}
+  viewK=k;const s=RUN.steps[k];
+  for(const id of [...LATENTS,'tfeat','temb','mid','attn'])OBJ[id].setData(s.T[id]);
+  OBJ.diff.setTitle('ε̂ − ε̂∅ · the prompt’s push',`auto-scaled: ±${OBJ.diff.scale.toFixed(3)} vs ±2.5`);
+  $('kslider').value=k;$('kV').textContent=`${k+1} / ${RUN.timesteps.length}`;
+  $('stepinfo').innerHTML=`timestep t = <b>${s.t}</b> of 1000 · ᾱ_t = <b>${s.abar.toFixed(4)}</b><br>signal √ᾱ = <b>${Math.sqrt(s.abar).toFixed(3)}</b> · noise √(1−ᾱ) = <b>${Math.sqrt(1-s.abar).toFixed(3)}</b>`;
+  drawWords();drawSparks();
+  const[zi,xi]=await Promise.all([s.B.zimg,s.B.x0img]);if(viewK!==k)return;
+  OBJ.zimg.draw(zi);OBJ.x0img.draw(xi);drawOverlay();
+}
+const heat=document.createElement('canvas');heat.width=heat.height=32;
+function drawOverlay(){
+  const s=RUN?.steps[viewK],o=OBJ.overlay;if(!s||!OBJ.x0img.has)return;
+  const R=INFO.attn_res,a=s.T.attn,tok=state.token,off=tok*R*R;heat.width=heat.height=R;
+  let m=1e-9;for(let i=0;i<R*R;i++)m=Math.max(m,a[off+i]);
+  const hc=heat.getContext('2d'),img=hc.createImageData(R,R),col=[0,0,0];
+  for(let i=0;i<R*R;i++){const v=Math.sqrt(a[off+i]/m);seqColor(v,col);img.data.set([col[0]*255,col[1]*255,col[2]*255,Math.min(255,60+v*170)],4*i);}
+  hc.putImageData(img,0,0);
+  const g=o.ctx;g.globalAlpha=1;g.drawImage(OBJ.x0img.canvas,0,0);g.globalAlpha=.78;g.imageSmoothingEnabled=true;g.drawImage(heat,0,0,512,512);g.globalAlpha=1;o.tex.needsUpdate=true;o.has=true;
+  o.setTitle(`x̂₀ + attention to “${RUN.tokens[tok]}”`,'brighter = this word is read more here');
+}
+function selectToken(c){
+  if(!RUN)return;state.token=c;RUN.userToken=true;markToken();drawWords();drawOverlay();
+  const t=OBJ.attn,cells=[];for(let y=0;y<t.H;y++)for(let x=0;x<t.W;x++)cells.push([c,y,x]);setBoxes(selHL,boxesFor(t,cells,.8));
+}
+
+/* ---------- panel: words ---------- */
+function drawWords(){
+  const box=$('words');box.innerHTML='';if(!RUN)return;const s=RUN.steps[viewK],R=INFO.attn_res;
+  const masses=RUN.tokens.map((w,c)=>{let m=0;if(s){const a=s.T.attn;for(let i=c*R*R;i<(c+1)*R*R;i++)m+=a[i];}return m/(R*R);});
+  const top=Math.max(1e-9,...masses.slice(1));
+  RUN.tokens.forEach((w,c)=>{const mass=masses[c];
+    const wl=document.createElement('span');wl.className='w'+(c===state.token?' on':'');wl.textContent=w;wl.title=w;
+    const bar=document.createElement('div');bar.className='bar';bar.style.width=`${Math.max(.4,Math.min(1,mass/top)*100)}%`;
+    const n=document.createElement('span');n.className='n';n.textContent=s?`${(mass*100).toFixed(1)}%`:'';
+    wl.onclick=bar.onclick=()=>selectToken(c);box.append(wl,bar,n);});
+}
+
+/* ---------- panel: small-multiple sparklines, one measure each ---------- */
+const SPARKS=[
+  {key:'noise',title:'noise level √(1−ᾱ_t)',fmt:v=>v.toFixed(3),min:0},
+  {key:'prompt',title:'prompt signal  rms(ε̂ − ε̂∅)',fmt:v=>v.toFixed(4),min:0},
+  {key:'move',title:'how far x̂₀ moved since last step',fmt:v=>v.toFixed(3),min:0},
+  {key:'ms',title:'UNet time per step (ms)',fmt:v=>v.toFixed(0),min:0},
+];
+const sparkEls=SPARKS.map(sp=>{const d=document.createElement('div');d.className='spark';
+  d.innerHTML=`<div class="hd"><span>${sp.title}</span><b></b></div><canvas></canvas><div class="tt"></div>`;$('sparks').appendChild(d);
+  const cv=d.querySelector('canvas'),tt=d.querySelector('.tt');let hk=-1;
+  const kAt=e=>{const r=cv.getBoundingClientRect(),n=RUN?.timesteps.length||1;return Math.round((e.clientX-r.left-6)/(r.width-12)*(n-1));};
+  cv.addEventListener('mousemove',e=>{hk=kAt(e);draw();});cv.addEventListener('mouseleave',()=>{hk=-1;draw();});
+  cv.addEventListener('click',e=>showStep(kAt(e),true));
+  function draw(){
+    const dpr=devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;if(!W)return;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
+    const steps=RUN?.steps||[],n=RUN?.timesteps.length||1,pts=steps.map((s,k)=>[k,s?.stats[sp.key]]).filter(p=>p[1]!=null&&isFinite(p[1]));
+    d.querySelector('.hd b').textContent=steps[viewK]&&isFinite(steps[viewK].stats[sp.key])?sp.fmt(steps[viewK].stats[sp.key]):'–';
+    g.strokeStyle='#252b3b';g.lineWidth=1;g.beginPath();g.moveTo(6,H-6.5);g.lineTo(W-6,H-6.5);g.stroke();
+    if(!pts.length){tt.style.display='none';return;}
+    let lo=sp.min??Math.min(...pts.map(p=>p[1])),hi=Math.max(...pts.map(p=>p[1]));if(hi-lo<1e-9)hi=lo+1;
+    const X=k=>6+(n>1?k/(n-1):.5)*(W-12),Y=v=>H-6-(v-lo)/(hi-lo)*(H-14);
+    g.strokeStyle='#ffb35a';g.lineWidth=2;g.lineJoin='round';g.beginPath();pts.forEach(([k,v],i)=>i?g.lineTo(X(k),Y(v)):g.moveTo(X(k),Y(v)));g.stroke();
+    const mark=(k,fill)=>{const s=steps[k];if(!s||!isFinite(s.stats[sp.key]))return;g.beginPath();g.arc(X(k),Y(s.stats[sp.key]),4,0,7);g.fillStyle=fill;g.fill();g.lineWidth=2;g.strokeStyle='#10131c';g.stroke();};
+    if(viewK>=0)mark(viewK,'#ffb35a');
+    if(hk>=0&&hk<n){g.strokeStyle='#5a6480';g.lineWidth=1;g.beginPath();g.moveTo(X(hk)+.5,4);g.lineTo(X(hk)+.5,H-6);g.stroke();mark(hk,'#ffffff');
+      const s=steps[hk];tt.style.display='block';tt.textContent=s&&isFinite(s.stats[sp.key])?`step ${hk+1} · t=${s.t} · ${sp.fmt(s.stats[sp.key])}`:`step ${hk+1} · not yet`;
+      tt.style.left=Math.min(W-150,Math.max(0,X(hk)-60))+'px';tt.style.top='-4px';}else tt.style.display='none';
+  }
+  return{draw};});
+function drawSparks(){for(const s of sparkEls)s.draw();}
+
+/* =====================================================================
+   7. Controls
+   ===================================================================== */
+const bindVal=(id,fmt)=>{const i=$(id),v=$(id+'V'),f=()=>v.textContent=fmt(+i.value);i.addEventListener('input',f);f();};
+bindVal('steps',v=>v);bindVal('guidance',v=>v.toFixed(1)+(v===1?' (off)':v===0?' (uncond)':''));
+for(const k of ['prompt','steps','guidance','seed','scheduler','negative'])if(params.has(k))$(k).value=params.get(k),$(k).dispatchEvent(new Event('input'));
+$('dice').onclick=()=>{$('seed').value=Math.floor(Math.random()*1e6);};
+function generate(){if($('go').disabled)return;send({type:'generate',prompt:$('prompt').value,negative:$('negative').value,steps:+$('steps').value,guidance:+$('guidance').value,seed:+$('seed').value,scheduler:$('scheduler').value});
+  state.follow=true;$('follow').checked=true;$('prog').firstChild.style.width='0';}
+$('go').onclick=generate;
+$('stop').onclick=()=>send({type:'cancel'});
+$('prompt').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey||!e.shiftKey)){e.preventDefault();generate();}});
+function syncButtons(){$('stop').disabled=!RUN?.generating;$('play').disabled=!RUN?.steps.length;$('play').textContent=state.playing?'❚❚ Pause':'▶ Replay';}
+$('kslider').addEventListener('input',e=>showStep(+e.target.value,true));
+$('follow').onchange=e=>{state.follow=e.target.checked;if(state.follow&&RUN)showStep(RUN.steps.length-1);};
+let playAcc=0;
+$('play').onclick=()=>{state.playing=!state.playing;if(state.playing&&viewK>=RUN.steps.length-1)showStep(0,true);syncButtons();};
+function stepPlay(dt){if(!state.playing)return;playAcc+=dt;if(playAcc<.18)return;playAcc=0;if(viewK>=RUN.steps.length-1){state.playing=false;syncButtons();return;}showStep(viewK+1,true);}
+
+document.querySelectorAll('[data-f]').forEach(el=>el.onclick=()=>{if(OBJ[el.dataset.f])focusObjs([el.dataset.f]);});
+function setMode(m){state.mode=m;document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));if(INFO){relayout(true);setTimeout(()=>fit(),60);}}
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+$('gap').oninput=e=>{state.gap=+e.target.value;if(state.mode!=='slices')setMode('slices');else relayout(false);};
+$('mag').onclick=e=>{state.mag=!state.mag;e.currentTarget.classList.toggle('on',state.mag);for(const o of OL)o.refresh();};
+$('lbl').onclick=e=>{state.labels=!state.labels;e.currentTarget.classList.toggle('on',state.labels);labelR.domElement.style.display=state.labels?'':'none';};
+document.querySelectorAll('[data-cam]').forEach(b=>b.onclick=()=>setOrtho(b.dataset.cam==='ortho'));
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>fit(VIEWS[b.dataset.view]));
+document.querySelectorAll('[data-focus]').forEach(b=>b.onclick=()=>INFO&&setFocus(b.dataset.focus));
+$('fit').onclick=()=>fit();
+
+/* =====================================================================
+   8. Main loop
+   ===================================================================== */
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h);labelR.setSize(w,h);persp.aspect=w/h;persp.updateProjectionMatrix();
+  const a=w/h;ortho.left=-ORTHO_H/2*a;ortho.right=ORTHO_H/2*a;ortho.top=ORTHO_H/2;ortho.bottom=-ORTHO_H/2;ortho.updateProjectionMatrix();drawSparks();}
+addEventListener('resize',resize);resize();
+const clock=new THREE.Clock();
+function frame(){
+  const dt=Math.min(.05,clock.getDelta());
+  if(layoutU<1){layoutU=Math.min(1,layoutU+dt/.75);const e=layoutU<.5?4*layoutU**3:1-Math.pow(-2*layoutU+2,3)/2;for(const o of OL){o.place(e);o.refresh();}updateEdges();}
+  if(camAnim){camAnim.u=Math.min(1,camAnim.u+dt/.9);const e=1-Math.pow(1-camAnim.u,3);cam.position.lerpVectors(camAnim.fp,camAnim.tp,e);ctl.target.lerpVectors(camAnim.ft,camAnim.tt,e);
+    if(state.ortho){ortho.zoom=camAnim.fz+(camAnim.tz-camAnim.fz)*e;ortho.updateProjectionMatrix();}if(camAnim.u>=1)camAnim=null;}
+  flyKeys(dt);stepPlay(dt);ctl.update();
+  if(mouseIn&&(mouseDirty||camAnim||layoutU<1)){mouseDirty=false;pick();}
+  renderer.render(scene,cam);labelR.render(scene,cam);
+  requestAnimationFrame(frame);
+}
+connect();frame();
+window.__live={get cam(){return cam},state,OBJ,get RUN(){return RUN},get INFO(){return INFO},showStep,selectToken};
+</script>
+</body>
+</html>

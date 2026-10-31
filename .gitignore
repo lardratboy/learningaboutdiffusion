@@ -1,0 +1,29 @@
+# Python / uv: recreate with `uv sync` (uv.lock is committed)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Model weights: downloaded on first run into ~/.cache/huggingface, never committed
+*.safetensors
+*.ckpt
+*.bin
+*.pt
+*.pth
+.cache/
+models/
+
+# Generated output
+outputs/
+*.png
+*.jpg
+*.jpeg
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Secrets
+.env
