@@ -18,6 +18,9 @@ outputs/
 *.png
 *.jpg
 *.jpeg
+# ...except the README screenshots
+!images/*.png
+!images/*.jpg
 
 # Editors / OS
 .DS_Store
